@@ -1,0 +1,49 @@
+{
+	"name": "@tdanks2000/api-core",
+	"version": "0.0.1",
+	"description": "Shared HTTP client runtime for the api-wrappers organisation. Provides request orchestration, a plugin lifecycle, transport abstraction, and built-in cache/retry/logger plugins.",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"keywords": [
+		"http",
+		"client",
+		"fetch",
+		"plugin",
+		"cache",
+		"retry",
+		"api",
+		"wrapper",
+		"typescript"
+	],
+	"license": "MIT",
+	"scripts": {
+		"build": "tsdown",
+		"test": "bun test",
+		"check": "biome check --write ."
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.4.9",
+		"@types/bun": "latest",
+		"tsdown": "latest"
+	},
+	"peerDependencies": {
+		"typescript": "^5"
+	}
+}
