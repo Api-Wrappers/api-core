@@ -101,6 +101,27 @@ describe("BaseHttpClient.graphql()", () => {
 		);
 	});
 
+	it("dedupes interpolated fragment definitions by fragment name", () => {
+		const fragment = gql`
+			fragment UserFields on User {
+				id
+				name
+			}
+		`;
+
+		const document = gql`
+			${fragment}
+			${fragment}
+			query GetUser {
+				user {
+					...UserFields
+				}
+			}
+		`;
+
+		expect(document.match(/fragment UserFields on User/g)).toHaveLength(1);
+	});
+
 	it("omits variables and operationName from the body when not provided", async () => {
 		let captured: RequestContext | undefined;
 
