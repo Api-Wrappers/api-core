@@ -1,29 +1,49 @@
 # @api-wrappers/api-core
 
-Shared HTTP runtime for the wrapper projects in this workspace. It provides a
-small typed client, a plugin pipeline, fetch-based transport, common error
-types, GraphQL support, and built-in plugins for auth, cache, retry, logging,
-timeouts, and rate limiting.
+Shared TypeScript HTTP runtime for API wrapper libraries.
 
-The intended use is internal to wrapper packages: keep each wrapper's public
-client and endpoint classes, and replace only the repeated HTTP plumbing.
+`@api-wrappers/api-core` gives wrapper packages a small, predictable foundation
+for request execution, retries, timeouts, auth headers, caching, rate limiting,
+GraphQL requests, custom transports, and plugin-based request/response
+middleware.
 
-## Install
+It is designed for packages that expose domain-specific clients while keeping
+their internal HTTP layer consistent and testable.
 
-For local workspace adoption:
+## Features
 
-```bash
-bun add ../api-core
-```
+- Typed REST helpers: `get`, `post`, `put`, `patch`, `delete`, `head`,
+  `options`, and `request`.
+- `requestWithResponse` for wrappers that need response headers, status, or
+  plugin metadata.
+- GraphQL helper with typed `data` and `variables`.
+- Deterministic plugin lifecycle with `setup`, `beforeRequest`,
+  `afterResponse`, `onError`, and `dispose`.
+- Built-in auth, cache, logger, rate-limit, retry, and timeout plugins.
+- Fetch transport with JSON bodies, raw string bodies, abort signals, and
+  timeout handling.
+- Query string support for primitives and repeated array values.
+- ESM and CommonJS builds with TypeScript declarations.
 
-For registry adoption after publishing:
+## Requirements
+
+- TypeScript 5+
+- A runtime with `fetch`, `Request`, `Response`, and `AbortController`
+  available. Modern Node, Bun, browsers, and edge runtimes satisfy this.
+- For older runtimes, pass a custom `fetch` implementation or a full custom
+  `Transport`.
+
+## Installation
 
 ```bash
 bun add @api-wrappers/api-core
+```
+
+```bash
 npm install @api-wrappers/api-core
 ```
 
-## Basic REST Client
+## Quick Start
 
 ```ts
 import {
@@ -33,29 +53,67 @@ import {
 	createTimeoutPlugin,
 } from "@api-wrappers/api-core";
 
+interface User {
+	id: string;
+	name: string;
+}
+
 const client = createClient({
 	baseUrl: "https://api.example.com/v1",
 	defaultHeaders: { accept: "application/json" },
 	plugins: [
-		createAuthPlugin(() => authManager.getAccessToken()),
+		createAuthPlugin(() => process.env.API_TOKEN),
 		createRetryPlugin({ maxAttempts: 3, delayMs: 300 }),
 		createTimeoutPlugin({ timeoutMs: 30_000 }),
 	],
 });
 
-const user = await client.get<User>("/users/1");
+const user = await client.get<User>("/users/123");
 ```
 
-`baseUrl` and request paths are slash-safe. These calls produce the same URL:
+`baseUrl` and request paths are slash-safe:
 
 ```ts
-createClient({ baseUrl: "https://api.example.com/v1/" }).get("/users");
-createClient({ baseUrl: "https://api.example.com/v1" }).get("users");
+client.get("/users");
+client.get("users");
 ```
 
-## Request Options
+Both work with `baseUrl: "https://api.example.com/v1/"`.
 
-All request methods accept common options:
+## Client Configuration
+
+```ts
+import { createClient } from "@api-wrappers/api-core";
+
+const client = createClient({
+	baseUrl: "https://api.example.com",
+	defaultHeaders: {
+		accept: "application/json",
+	},
+	timeoutMs: 10_000,
+	retry: {
+		maxAttempts: 2,
+		delayMs: 250,
+		jitter: true,
+		retriableStatusCodes: [429, 500, 502, 503, 504],
+	},
+	plugins: [],
+	logger: console,
+});
+```
+
+| Option | Purpose |
+| --- | --- |
+| `baseUrl` | Base URL prepended to relative request paths. |
+| `defaultHeaders` | Headers merged into every request. Per-request headers win. |
+| `timeoutMs` | Default request timeout. Can be overridden per request. |
+| `retry` | Global retry policy. Can be overridden by `createRetryPlugin`. |
+| `plugins` | Plugin list for auth, cache, logging, rate limiting, etc. |
+| `transport` | Full request executor override, useful in tests. |
+| `fetch` | Custom fetch implementation used by the default transport. |
+| `logger` | Internal diagnostics logger. Defaults to `console`. |
+
+## Requests
 
 ```ts
 await client.get<SearchResult>("/search", {
@@ -66,161 +124,340 @@ await client.get<SearchResult>("/search", {
 		skip: undefined,
 	},
 	headers: { accept: "application/json" },
-	timeoutMs: 10_000,
+	timeoutMs: 5_000,
 	signal: abortController.signal,
 	tags: ["search"],
 	cacheKey: "search:alien:2",
 });
 ```
 
-Query arrays are emitted as repeated parameters, and `null` or `undefined`
-values are skipped.
+Query values can be strings, numbers, booleans, nullish values, or arrays of
+those primitives. `null` and `undefined` are skipped. Arrays are encoded as
+repeated query parameters:
 
-## Raw Response Access
+```txt
+?with_genres=878&with_genres=12
+```
 
-Use `requestWithResponse` when a wrapper needs status, headers, or plugin
-metadata:
+### Request Methods
+
+```ts
+client.get<T>(path, options);
+client.post<T>(path, body, options);
+client.put<T>(path, body, options);
+client.patch<T>(path, body, options);
+client.delete<T>(path, options);
+client.head<T>(path, options);
+client.options<T>(path, options);
+client.request<T>(path, { method: "POST", body });
+```
+
+Plain objects and arrays are JSON encoded. Strings and native `BodyInit`
+values are sent as-is, which supports APIs that expect text query languages:
+
+```ts
+const games = await client.post<Game[]>(
+	"/games",
+	"fields name,rating; limit 10;",
+	{
+		headers: {
+			"content-type": "text/plain",
+			accept: "application/json",
+		},
+	},
+);
+```
+
+### Response Metadata
+
+Use `requestWithResponse` when a wrapper needs more than the parsed body:
 
 ```ts
 const result = await client.requestWithResponse<MoviePage>("/movie/popular");
 
-console.log(result.data.results);
-console.log(result.response.headers.get("x-ratelimit-remaining"));
-console.log(result.meta["cache.served"]);
+result.data;
+result.response.status;
+result.response.headers.get("x-ratelimit-remaining");
+result.request.url;
+result.meta["cache.served"];
 ```
-
-`request()` and the convenience methods return only `data`.
-
-## Text Body APIs
-
-String bodies are sent as-is. This supports APIs like IGDB that expect APICalypse
-query text instead of JSON:
-
-```ts
-const games = await client.post<Game[]>("/games", "fields name,rating; limit 10;", {
-	headers: {
-		"content-type": "text/plain",
-		accept: "application/json",
-	},
-});
-```
-
-Plain objects and arrays are JSON encoded by default.
 
 ## GraphQL
 
 ```ts
-const data = await client.graphql<GetUserQuery, GetUserVariables>("/graphql", {
-	query: GET_USER,
+interface GetMediaQuery {
+	Media: { id: number; title: { romaji: string } };
+}
+
+interface GetMediaVariables {
+	id: number;
+}
+
+const data = await client.graphql<GetMediaQuery, GetMediaVariables>("/", {
+	query: `
+		query GetMedia($id: Int) {
+			Media(id: $id) { id title { romaji } }
+		}
+	`,
 	variables: { id: 1 },
-	operationName: "GetUser",
-	cacheKey: "gql:GetUser:1",
+	operationName: "GetMedia",
 });
+
+console.log(data.Media.title.romaji);
 ```
 
-HTTP failures throw `ApiError`, `RateLimitError`, or `TimeoutError`.
-GraphQL responses with an `errors` array throw `GraphQLRequestError`, which also
-extends `ApiError`.
+GraphQL uses the same transport, plugin lifecycle, retry policy, timeout
+handling, and error classes as REST requests.
 
 ## Built-In Plugins
 
+Plugins are ordinary objects that run through a deterministic lifecycle. Lower
+priority values run earlier in `beforeRequest`; higher values run earlier in
+`afterResponse`.
+
+### Auth
+
 ```ts
-import {
-	createAuthPlugin,
-	createCachePlugin,
-	createLoggerPlugin,
-	createRateLimitPlugin,
-	createRetryPlugin,
-	createTimeoutPlugin,
-	MemoryStore,
-} from "@api-wrappers/api-core";
+createAuthPlugin("static-token");
+createAuthPlugin(() => tokenStore.getAccessToken());
+createAuthPlugin({
+	getToken: () => apiKey,
+	headerName: "x-api-key",
+	scheme: null,
+});
+```
+
+The default header is:
+
+```txt
+authorization: Bearer <token>
+```
+
+### Retry
+
+```ts
+createRetryPlugin({
+	maxAttempts: 3,
+	delayMs: 300,
+	jitter: true,
+	retriableStatusCodes: [429, 500, 502, 503, 504],
+});
+```
+
+`429` responses respect `retry-after` when present. Numeric values are treated
+as seconds; HTTP-date values are also supported.
+
+### Timeout
+
+```ts
+createTimeoutPlugin({ timeoutMs: 30_000 });
+```
+
+Timeouts throw `TimeoutError`.
+
+### Rate Limit
+
+```ts
+createRateLimitPlugin({
+	maxConcurrent: 4,
+	minTimeMs: 250,
+});
+```
+
+```ts
+createRateLimitPlugin({
+	maxRequestsPerInterval: 30,
+	intervalMs: 60_000,
+});
+```
+
+The limiter releases slots on successful responses, transport failures, and
+plugin failures.
+
+### Cache
+
+```ts
+import { createCachePlugin, MemoryStore } from "@api-wrappers/api-core";
 
 const cache = createCachePlugin({
 	store: new MemoryStore(),
 	ttlMs: 60_000,
+	methods: ["GET"],
 });
 
 const client = createClient({
 	baseUrl: "https://api.example.com",
-	plugins: [
-		createRateLimitPlugin({ maxConcurrent: 4, minTimeMs: 250 }),
-		createAuthPlugin(() => authManager.getAccessToken()),
-		createRetryPlugin({ maxAttempts: 3, delayMs: 250 }),
-		createLoggerPlugin({ logRequest: false }),
-		cache,
-		createTimeoutPlugin({ timeoutMs: 30_000 }),
-	],
+	plugins: [cache],
+});
+
+await client.get("/users/1", { tags: ["user"] });
+await cache.invalidate("GET:https://api.example.com/users/1");
+await cache.invalidateByTag("user");
+```
+
+Cache hits skip the transport and set `meta["cache.served"]`.
+
+### Logger
+
+```ts
+createLoggerPlugin({
+	logRequest: true,
+	logResponse: true,
+	logError: true,
+	logger: console,
 });
 ```
 
-Plugin priority is deterministic:
+Pass a structured logger or no-op logger to control diagnostics.
 
-| Hook | Order |
+## Custom Plugins
+
+```ts
+import type { ApiPlugin } from "@api-wrappers/api-core";
+
+export function createClientIdPlugin(clientId: string): ApiPlugin {
+	return {
+		name: "client-id",
+		priority: 2,
+		beforeRequest(ctx) {
+			return {
+				...ctx,
+				headers: {
+					...ctx.headers,
+					"client-id": clientId,
+				},
+			};
+		},
+	};
+}
+```
+
+Hooks may return a new context or `undefined` to keep the current one.
+
+| Hook | When it runs |
 | --- | --- |
-| `beforeRequest` | Lower priority first |
-| `afterResponse` | Higher priority first |
-| `onError` | Registered plugin order |
-| `dispose` | Higher priority first |
+| `setup(client)` | Once, lazily before the first request. |
+| `beforeRequest(ctx)` | Before transport execution. |
+| `afterResponse(ctx)` | After response parsing. |
+| `onError(error, ctx)` | For transport, HTTP, and plugin failures. |
+| `dispose()` | When `client.dispose()` is called. |
 
-## Wrapper Adoption
+Read [docs/guides/plugins.md](docs/guides/plugins.md) for the full plugin
+contract.
 
-Keep endpoint/service classes unchanged and replace each wrapper's private HTTP
-client internals with `BaseHttpClient` or `createClient`.
+## Error Handling
 
-See:
+```ts
+import {
+	ApiError,
+	GraphQLRequestError,
+	RateLimitError,
+	TimeoutError,
+} from "@api-wrappers/api-core";
 
-- [Adoption Guide](docs/adoption.md)
-- [Plugin Guide](docs/plugins.md)
+try {
+	await client.get("/resource");
+} catch (error) {
+	if (error instanceof RateLimitError) {
+		console.log(error.retryAfterMs);
+	} else if (error instanceof TimeoutError) {
+		console.log("timed out");
+	} else if (error instanceof GraphQLRequestError) {
+		console.log(error.graphqlErrors);
+	} else if (error instanceof ApiError) {
+		console.log(error.status, error.responseBody);
+	}
+}
+```
 
-## Public Exports
+| Error | Meaning |
+| --- | --- |
+| `ApiError` | Non-2xx HTTP response after retries are exhausted. |
+| `RateLimitError` | HTTP 429 response. Includes `retryAfterMs` when available. |
+| `TimeoutError` | Request exceeded timeout. |
+| `GraphQLRequestError` | GraphQL response contained an `errors` array. |
 
-Core:
+## Testing
 
-- `createClient`
-- `BaseHttpClient`
-- `RequestOptions`
-- `ApiResponse`
-- `ClientConfig`
-- `Transport`
-- `RequestContext`
-- `ResponseContext`
+Use a custom transport for deterministic tests:
 
-Errors:
+```ts
+import { BaseHttpClient } from "@api-wrappers/api-core";
 
-- `ApiError`
-- `RateLimitError`
-- `TimeoutError`
-- `GraphQLRequestError`
+const client = new BaseHttpClient({
+	baseUrl: "https://api.example.com",
+	transport: {
+		execute: async (ctx) =>
+			new Response(JSON.stringify({ url: ctx.url }), {
+				headers: { "content-type": "application/json" },
+			}),
+	},
+});
+```
 
-Plugins:
+This exercises the client, request options, plugins, and error handling without
+making network calls.
 
-- `ApiPlugin`
-- `createAuthPlugin`
-- `createCachePlugin`
-- `MemoryStore`
-- `createLoggerPlugin`
-- `createRateLimitPlugin`
-- `createRetryPlugin`
-- `createTimeoutPlugin`
+## Package Exports
 
-Utilities and types:
+```ts
+import {
+	ApiError,
+	BaseHttpClient,
+	createAuthPlugin,
+	createCachePlugin,
+	createClient,
+	createLoggerPlugin,
+	createRateLimitPlugin,
+	createRetryPlugin,
+	createTimeoutPlugin,
+	GraphQLRequestError,
+	MemoryStore,
+	RateLimitError,
+	TimeoutError,
+} from "@api-wrappers/api-core";
 
-- `buildUrl`
-- `resolveUrl`
-- `mergeHeaders`
-- `sleep`
-- `HttpMethod`
-- `QueryParams`
-- `QueryValue`
+import type {
+	ApiPlugin,
+	ApiResponse,
+	ClientConfig,
+	QueryParams,
+	RequestContext,
+	RequestOptions,
+	ResponseContext,
+	Transport,
+} from "@api-wrappers/api-core";
+```
 
-## Build And Verify
+The package publishes:
+
+- ESM: `dist/index.mjs`
+- CommonJS: `dist/index.cjs`
+- Type declarations for both module formats
+- README and docs
+
+## More Documentation
+
+- [Documentation home](docs/README.md): recommended reading order and full docs
+  map.
+- [Getting started](docs/getting-started.md): install, create a client, and make
+  the first request.
+- [REST requests](docs/guides/rest-requests.md): methods, query params, request
+  bodies, abort signals, and response metadata.
+- [Built-in plugins](docs/guides/built-in-plugins.md): auth, retry, timeout,
+  rate-limit, cache, and logger usage.
+- [Client API reference](docs/reference/client.md): client methods and response
+  shapes.
+
+## Development
 
 ```bash
+bun install
 bun run check
 bun test
 bun run build
 npm pack --dry-run
 ```
 
-The package ships `dist` only. Build output includes ESM, CommonJS, and matching
-TypeScript declarations.
+`dist` is generated by `tsdown`. The published package includes `dist`, `docs`,
+`README.md`, and `package.json`.

@@ -37,7 +37,11 @@
 	"scripts": {
 		"build": "tsdown",
 		"test": "bun test",
-		"check": "biome check --write ."
+		"check": "biome check --write .",
+		"check:ci": "biome check ."
+	},
+	"publishConfig": {
+		"access": "public"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.9",
