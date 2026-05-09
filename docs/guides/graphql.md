@@ -16,6 +16,24 @@ const data = await client.graphql("/", {
 });
 ```
 
+Use `gql` when you want a familiar template tag for editor tooling without
+adding a GraphQL parser dependency:
+
+```ts
+import { gql } from "@api-wrappers/api-core";
+
+const GET_VIEWER = gql`
+	query {
+		Viewer { id name }
+	}
+`;
+
+await client.graphql("/", {
+	query: GET_VIEWER,
+	signal: abortController.signal,
+});
+```
+
 ## Typed Query And Variables
 
 ```ts

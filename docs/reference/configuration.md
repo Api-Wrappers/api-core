@@ -41,6 +41,21 @@ interface RequestOptions {
 }
 ```
 
+## `GraphQLRequestOptions<TVariables>`
+
+```ts
+interface GraphQLRequestOptions<TVariables extends object = Record<string, unknown>> {
+	query: string;
+	variables?: TVariables;
+	operationName?: string;
+	headers?: Record<string, string>;
+	signal?: AbortSignal;
+	timeoutMs?: number;
+	cacheKey?: string;
+	tags?: string[];
+}
+```
+
 ## `RetryConfig`
 
 ```ts

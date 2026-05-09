@@ -4,6 +4,7 @@ import type { RequestContext } from "../context/RequestContext";
 import { ApiError } from "../errors/ApiError";
 import { RateLimitError } from "../errors/RateLimitError";
 import { GraphQLRequestError } from "../graphql/GraphQLRequestError";
+import { gql } from "../graphql/gql";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +71,34 @@ describe("BaseHttpClient.graphql()", () => {
 		expect(body.query).toBe(QUERY);
 		expect(body.variables).toEqual({ id: "42" });
 		expect(body.operationName).toBe("GetUser");
+	});
+
+	it("passes an abort signal through to the request context", async () => {
+		let captured: RequestContext | undefined;
+		const abortController = new AbortController();
+
+		const client = new BaseHttpClient({
+			baseUrl: BASE,
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({ data: {} });
+			}),
+		});
+
+		await client.graphql(PATH, {
+			query: QUERY,
+			signal: abortController.signal,
+		});
+
+		expect(captured?.signal).toBe(abortController.signal);
+	});
+
+	it("exports a passthrough gql template tag", () => {
+		const fragment = "id name";
+
+		expect(gql`query GetUser { user { ${fragment} } }`).toBe(
+			"query GetUser { user { id name } }",
+		);
 	});
 
 	it("omits variables and operationName from the body when not provided", async () => {

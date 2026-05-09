@@ -84,6 +84,7 @@ export type { TimeoutPluginOptions } from "./plugins/timeout/types";
 // These exports cover the standalone types and error class.
 
 export { GraphQLRequestError } from "./graphql/GraphQLRequestError";
+export { gql } from "./graphql/gql";
 export type {
 	GraphQLErrorDetail,
 	GraphQLRequestOptions,

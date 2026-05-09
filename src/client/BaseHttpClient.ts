@@ -383,13 +383,14 @@ export class BaseHttpClient {
 	 */
 	async graphql<
 		TData = unknown,
-		TVariables extends Record<string, unknown> = Record<string, unknown>,
+		TVariables extends object = Record<string, unknown>,
 	>(path: string, options: GraphQLRequestOptions<TVariables>): Promise<TData> {
 		const {
 			query,
 			variables,
 			operationName,
 			headers,
+			signal,
 			timeoutMs,
 			cacheKey,
 			tags,
@@ -403,6 +404,7 @@ export class BaseHttpClient {
 				...(operationName !== undefined && { operationName }),
 			},
 			headers,
+			signal,
 			timeoutMs,
 			cacheKey,
 			tags,

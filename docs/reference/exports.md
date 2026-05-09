@@ -47,6 +47,7 @@
 
 ## GraphQL
 
+- `gql`
 - `GraphQLErrorDetail`
 - `GraphQLRequestOptions`
 - `GraphQLResponse`

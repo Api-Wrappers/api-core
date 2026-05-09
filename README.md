@@ -411,6 +411,7 @@ import {
 	createRateLimitPlugin,
 	createRetryPlugin,
 	createTimeoutPlugin,
+	gql,
 	GraphQLRequestError,
 	MemoryStore,
 	RateLimitError,

@@ -35,7 +35,7 @@ export interface GraphQLResponse<TData = unknown> {
  *   variable checking.
  */
 export interface GraphQLRequestOptions<
-	TVariables extends Record<string, unknown> = Record<string, unknown>,
+	TVariables extends object = Record<string, unknown>,
 > {
 	/**
 	 * The GraphQL query or mutation document string.
@@ -54,6 +54,10 @@ export interface GraphQLRequestOptions<
 	 * this request only. `content-type: application/json` is always set.
 	 */
 	headers?: Record<string, string>;
+	/**
+	 * Optional caller-provided abort signal. Composes with `timeoutMs`.
+	 */
+	signal?: AbortSignal;
 	/**
 	 * Per-request timeout override in milliseconds. Throws
 	 * {@link TimeoutError} when exceeded.
