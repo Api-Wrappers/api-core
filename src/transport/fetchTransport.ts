@@ -1,6 +1,7 @@
 import type { RequestContext } from "../context/RequestContext";
 import { TimeoutError } from "../errors/TimeoutError";
 import { buildUrl } from "../utils/buildUrl";
+import { isPlainObject } from "../utils/isPlainObject";
 import type { Transport } from "./types";
 
 /**
@@ -29,16 +30,35 @@ export function createFetchTransport(
 				ctx.body !== undefined && ctx.method !== "GET" && ctx.method !== "HEAD";
 
 			if (hasBody) {
-				init.body = JSON.stringify(ctx.body);
+				init.body = serializeRequestBody(ctx.body, ctx.headers);
 			}
 
-			if (ctx.timeoutMs !== undefined) {
+			if (ctx.timeoutMs !== undefined || ctx.signal) {
 				const controller = new AbortController();
-				const timer = setTimeout(() => controller.abort(), ctx.timeoutMs);
+				let timedOut = false;
+				const abortFromParent = () => controller.abort(ctx.signal?.reason);
+				const timer =
+					ctx.timeoutMs !== undefined
+						? setTimeout(() => {
+								timedOut = true;
+								controller.abort();
+							}, ctx.timeoutMs)
+						: undefined;
+
+				if (ctx.signal) {
+					if (ctx.signal.aborted) {
+						controller.abort(ctx.signal.reason);
+					} else {
+						ctx.signal.addEventListener("abort", abortFromParent, {
+							once: true,
+						});
+					}
+				}
+
 				try {
 					return await fetchFn(url, { ...init, signal: controller.signal });
 				} catch (err) {
-					if (err instanceof Error && err.name === "AbortError") {
+					if (timedOut && err instanceof Error && err.name === "AbortError") {
 						throw new TimeoutError(
 							`Request timed out after ${ctx.timeoutMs}ms`,
 							err,
@@ -46,7 +66,8 @@ export function createFetchTransport(
 					}
 					throw err;
 				} finally {
-					clearTimeout(timer);
+					if (timer) clearTimeout(timer);
+					ctx.signal?.removeEventListener("abort", abortFromParent);
 				}
 			}
 
@@ -68,3 +89,39 @@ export function createFetchTransport(
  * `fetch` function via {@link ClientConfig.fetch}.
  */
 export const fetchTransport: Transport = createFetchTransport();
+
+function serializeRequestBody(
+	body: unknown,
+	headers: Record<string, string>,
+): BodyInit {
+	if (isBodyInit(body)) return body;
+
+	const contentType = headers["content-type"] ?? "";
+	if (
+		isPlainObject(body) ||
+		Array.isArray(body) ||
+		contentType.includes("json")
+	) {
+		return JSON.stringify(body);
+	}
+
+	return String(body);
+}
+
+function isBodyInit(body: unknown): body is BodyInit {
+	if (typeof body === "string") return true;
+	if (body instanceof ArrayBuffer) return true;
+	if (ArrayBuffer.isView(body)) return true;
+	if (typeof Blob !== "undefined" && body instanceof Blob) return true;
+	if (typeof FormData !== "undefined" && body instanceof FormData) return true;
+	if (
+		typeof URLSearchParams !== "undefined" &&
+		body instanceof URLSearchParams
+	) {
+		return true;
+	}
+	if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) {
+		return true;
+	}
+	return false;
+}

@@ -23,12 +23,14 @@ export interface ApiPlugin {
 	 * Called before the transport executes. Return a mutated context
 	 * or void to keep the existing one.
 	 */
+	// biome-ignore lint/suspicious/noConfusingVoidType: void is the public hook signal for keeping the current context.
 	beforeRequest?(ctx: RequestContext): MaybePromise<RequestContext | void>;
 
 	/**
 	 * Called after a successful transport response. Return a mutated
 	 * context or void to keep the existing one.
 	 */
+	// biome-ignore lint/suspicious/noConfusingVoidType: void is the public hook signal for keeping the current context.
 	afterResponse?(ctx: ResponseContext): MaybePromise<ResponseContext | void>;
 
 	/** Called when the request pipeline throws. */

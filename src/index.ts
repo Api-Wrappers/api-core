@@ -1,11 +1,11 @@
 /**
- * @module @tdanks2000/api-core
+ * @module @api-wrappers/api-core
  *
  * Shared HTTP client runtime for the `api-wrappers` organisation.
  *
  * ## Quick start
  * ```ts
- * import { createClient, createLoggerPlugin, createCachePlugin } from "@tdanks2000/api-core";
+ * import { createClient, createLoggerPlugin, createCachePlugin } from "@api-wrappers/api-core";
  *
  * const client = createClient({
  *   baseUrl: "https://api.example.com/v1",
@@ -33,7 +33,7 @@
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
-export type { RequestOptions } from "./client/BaseHttpClient";
+export type { ApiResponse, RequestOptions } from "./client/BaseHttpClient";
 export { BaseHttpClient } from "./client/BaseHttpClient";
 export { createClient } from "./client/createClient";
 export type {
@@ -60,6 +60,8 @@ export type { ApiPlugin } from "./plugin/types";
 
 // ─── Built-in plugins ─────────────────────────────────────────────────────────
 
+export { createAuthPlugin } from "./plugins/auth/authPlugin";
+export type { AuthPluginOptions } from "./plugins/auth/types";
 export { createCachePlugin } from "./plugins/cache/cachePlugin";
 export { MemoryStore } from "./plugins/cache/memoryStore";
 export type {
@@ -70,6 +72,8 @@ export type {
 
 export { createLoggerPlugin } from "./plugins/logger/loggerPlugin";
 export type { LoggerPluginOptions } from "./plugins/logger/types";
+export { createRateLimitPlugin } from "./plugins/rateLimit/rateLimitPlugin";
+export type { RateLimitPluginOptions } from "./plugins/rateLimit/types";
 export { createRetryPlugin } from "./plugins/retry/retryPlugin";
 export type { RetryPluginOptions } from "./plugins/retry/types";
 export { createTimeoutPlugin } from "./plugins/timeout/timeoutPlugin";
@@ -96,11 +100,18 @@ export type { Transport } from "./transport/types";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
-export type { HttpMethod, MaybePromise } from "./types/common";
+export type {
+	HttpMethod,
+	MaybePromise,
+	QueryParams,
+	QueryPrimitive,
+	QueryValue,
+} from "./types/common";
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 export { buildUrl } from "./utils/buildUrl";
 export { isPlainObject } from "./utils/isPlainObject";
 export { mergeHeaders } from "./utils/mergeHeaders";
+export { resolveUrl } from "./utils/resolveUrl";
 export { sleep } from "./utils/sleep";

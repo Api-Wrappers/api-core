@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { buildUrl } from "../utils/buildUrl";
 import { isPlainObject } from "../utils/isPlainObject";
 import { mergeHeaders } from "../utils/mergeHeaders";
+import { resolveUrl } from "../utils/resolveUrl";
 import { sleep } from "../utils/sleep";
 
 describe("buildUrl", () => {
@@ -22,6 +23,36 @@ describe("buildUrl", () => {
 		});
 		expect(url).not.toContain("b=");
 		expect(url).toContain("a=x");
+	});
+
+	it("skips null query values and repeats array query values", () => {
+		const url = buildUrl("https://api.test/v1", {
+			a: ["x", null, "y"],
+			b: null,
+		});
+		expect(url).toBe("https://api.test/v1?a=x&a=y");
+	});
+
+	it("appends query params to URLs that already have a query string", () => {
+		const url = buildUrl("https://api.test/v1?existing=1", { page: 2 });
+		expect(url).toBe("https://api.test/v1?existing=1&page=2");
+	});
+});
+
+describe("resolveUrl", () => {
+	it("joins base URLs and paths without duplicate slashes", () => {
+		expect(resolveUrl("https://api.test/v1/", "/users")).toBe(
+			"https://api.test/v1/users",
+		);
+		expect(resolveUrl("https://api.test/v1", "users")).toBe(
+			"https://api.test/v1/users",
+		);
+	});
+
+	it("returns absolute request URLs unchanged", () => {
+		expect(resolveUrl("https://api.test", "https://other.test/users")).toBe(
+			"https://other.test/users",
+		);
 	});
 });
 

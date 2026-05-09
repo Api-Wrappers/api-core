@@ -4,13 +4,14 @@ import { ApiError } from "../errors/ApiError";
 import { RateLimitError } from "../errors/RateLimitError";
 import { GraphQLRequestError } from "../graphql/GraphQLRequestError";
 import type { GraphQLRequestOptions, GraphQLResponse } from "../graphql/types";
-import { PluginManager } from "../plugin/PluginManager";
+import { getPluginErrorContext, PluginManager } from "../plugin/PluginManager";
 import {
 	createFetchTransport,
 	fetchTransport,
 } from "../transport/fetchTransport";
-import type { HttpMethod } from "../types/common";
+import type { HttpMethod, QueryParams } from "../types/common";
 import { mergeHeaders } from "../utils/mergeHeaders";
+import { resolveUrl } from "../utils/resolveUrl";
 import { sleep } from "../utils/sleep";
 import type { ClientConfig } from "./types";
 
@@ -28,9 +29,12 @@ export interface RequestOptions {
 	body?: unknown;
 	/**
 	 * Query string parameters appended to the URL. `undefined` values are
-	 * omitted. Numbers and booleans are coerced to strings.
+	 * omitted. Numbers and booleans are coerced to strings. Array values are
+	 * emitted as repeated query parameters.
 	 */
-	query?: Record<string, string | number | boolean | undefined>;
+	query?: QueryParams;
+	/** Optional caller-provided abort signal. Composes with `timeoutMs`. */
+	signal?: AbortSignal;
 	/**
 	 * Per-request timeout override in milliseconds. Takes precedence over
 	 * `ClientConfig.timeoutMs`. Throws {@link TimeoutError} when exceeded.
@@ -46,6 +50,13 @@ export interface RequestOptions {
 	 * these for cache invalidation, metrics grouping, or filtering.
 	 */
 	tags?: string[];
+}
+
+export interface ApiResponse<T = unknown> {
+	data: T;
+	response: Response;
+	request: RequestContext;
+	meta: Record<string, unknown>;
 }
 
 const DEFAULT_RETRIABLE_STATUS_CODES = [429, 500, 502, 503, 504];
@@ -76,6 +87,7 @@ export class BaseHttpClient {
 	protected readonly config: ClientConfig;
 	protected readonly pluginManager: PluginManager;
 	private initialized = false;
+	private initPromise: Promise<void> | undefined;
 
 	constructor(config: ClientConfig) {
 		this.config = config;
@@ -88,14 +100,23 @@ export class BaseHttpClient {
 	/** Initializes all plugins. Called lazily on first request. */
 	async init(): Promise<void> {
 		if (this.initialized) return;
-		await this.pluginManager.setup(this);
-		this.initialized = true;
+		this.initPromise ??= this.pluginManager
+			.setup(this)
+			.then(() => {
+				this.initialized = true;
+			})
+			.catch((err) => {
+				this.initPromise = undefined;
+				throw err;
+			});
+		await this.initPromise;
 	}
 
 	/** Disposes all plugins. Call when the client is no longer needed. */
 	async dispose(): Promise<void> {
 		await this.pluginManager.dispose();
 		this.initialized = false;
+		this.initPromise = undefined;
 	}
 
 	/**
@@ -122,6 +143,20 @@ export class BaseHttpClient {
 		path: string,
 		options: RequestOptions = {},
 	): Promise<T> {
+		const result = await this.requestWithResponse<T>(path, options);
+		return result.data;
+	}
+
+	/**
+	 * Executes a request and returns the parsed body plus the final response
+	 * context. Use this in wrappers that need response headers, status, or
+	 * plugin metadata while keeping the same error/retry behaviour as
+	 * {@link request}.
+	 */
+	async requestWithResponse<T = unknown>(
+		path: string,
+		options: RequestOptions = {},
+	): Promise<ApiResponse<T>> {
 		await this.init();
 
 		const transport =
@@ -142,7 +177,7 @@ export class BaseHttpClient {
 
 		for (let attempt = 0; attempt < maxAttempts; attempt++) {
 			const baseCtx: RequestContext = {
-				url: `${this.config.baseUrl}${path}`,
+				url: resolveUrl(this.config.baseUrl, path),
 				method: options.method ?? "GET",
 				headers: mergeHeaders(
 					{ "content-type": "application/json" },
@@ -151,6 +186,7 @@ export class BaseHttpClient {
 				),
 				body: options.body,
 				query: options.query,
+				signal: options.signal,
 				meta: {},
 				cacheKey: options.cacheKey,
 				tags: options.tags,
@@ -163,7 +199,10 @@ export class BaseHttpClient {
 			try {
 				ctx = await this.pluginManager.beforeRequest(baseCtx);
 			} catch (err) {
-				await this.pluginManager.onError(err, baseCtx);
+				await this.pluginManager.onError(
+					err,
+					getPluginErrorContext(err) ?? baseCtx,
+				);
 				throw err;
 			}
 
@@ -225,10 +264,7 @@ export class BaseHttpClient {
 
 				if (shouldRetry) {
 					if (rawResponse.status === 429) {
-						const retryAfter = rawResponse.headers.get("retry-after");
-						const wait = retryAfter
-							? parseInt(retryAfter, 10) * 1_000
-							: undefined;
+						const wait = readRetryAfterMs(rawResponse);
 						await this.waitForRetry(attempt, wait ?? baseDelay, false);
 					} else {
 						await this.waitForRetry(attempt, baseDelay, jitter);
@@ -242,7 +278,12 @@ export class BaseHttpClient {
 				throw err;
 			}
 
-			return resCtx.parsedBody as T;
+			return {
+				data: resCtx.parsedBody as T,
+				response: resCtx.response,
+				request: resCtx.request,
+				meta: resCtx.meta,
+			};
 		}
 
 		throw lastError;
@@ -288,6 +329,20 @@ export class BaseHttpClient {
 		options?: Omit<RequestOptions, "method">,
 	): Promise<T> {
 		return this.request<T>(path, { ...options, method: "DELETE" });
+	}
+
+	head<T = unknown>(
+		path: string,
+		options?: Omit<RequestOptions, "method">,
+	): Promise<T> {
+		return this.request<T>(path, { ...options, method: "HEAD" });
+	}
+
+	options<T = unknown>(
+		path: string,
+		options?: Omit<RequestOptions, "method">,
+	): Promise<T> {
+		return this.request<T>(path, { ...options, method: "OPTIONS" });
 	}
 
 	/**
@@ -382,20 +437,39 @@ export class BaseHttpClient {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function parseBody(response: Response): Promise<unknown> {
+	if (response.status === 204 || response.status === 205) return undefined;
+	if (response.headers.get("content-length") === "0") return undefined;
+
+	const text = await response.text();
+	if (!text) return undefined;
+
 	const contentType = response.headers.get("content-type") ?? "";
 	if (contentType.includes("application/json")) {
-		return response.json();
+		return JSON.parse(text);
 	}
-	return response.text();
+	return text;
 }
 
 function normalizeHttpError(response: Response, body: unknown): ApiError {
 	if (response.status === 429) {
-		return new RateLimitError();
+		return new RateLimitError(readRetryAfterMs(response), body);
 	}
 	return new ApiError(
 		`Request failed with status ${response.status}`,
 		response.status,
 		body,
 	);
+}
+
+function readRetryAfterMs(response: Response): number | undefined {
+	const raw = response.headers.get("retry-after");
+	if (!raw) return undefined;
+
+	const seconds = Number(raw);
+	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
+
+	const date = Date.parse(raw);
+	if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
+
+	return undefined;
 }

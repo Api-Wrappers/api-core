@@ -16,7 +16,7 @@ import type { GraphQLErrorDetail } from "./types";
  *
  * @example
  * ```ts
- * import { GraphQLRequestError } from "@tdanks2000/api-core";
+ * import { GraphQLRequestError } from "@api-wrappers/api-core";
  *
  * try {
  *   const data = await client.graphql<MyQuery>("/graphql", { query: QUERY });

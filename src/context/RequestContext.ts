@@ -1,11 +1,12 @@
-import type { HttpMethod } from "../types/common";
+import type { HttpMethod, QueryParams } from "../types/common";
 
 export interface RequestContext {
 	url: string;
 	method: HttpMethod;
 	headers: Record<string, string>;
 	body?: unknown;
-	query?: Record<string, string | number | boolean | undefined>;
+	query?: QueryParams;
+	signal?: AbortSignal;
 	meta: Record<string, unknown>;
 	cacheKey?: string;
 	tags?: string[];

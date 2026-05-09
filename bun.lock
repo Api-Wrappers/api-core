@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@tdanks2000/api-core",
+      "name": "@api-wrappers/api-core",
       "devDependencies": {
         "@biomejs/biome": "2.4.9",
         "@types/bun": "latest",

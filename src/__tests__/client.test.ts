@@ -58,6 +58,42 @@ describe("BaseHttpClient", () => {
 		expect(captured?.query).toEqual({ q: "test", page: 2 });
 	});
 
+	it("joins baseUrl and path consistently", async () => {
+		let captured: RequestContext | undefined;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test/v1/",
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({});
+			}),
+		});
+
+		await client.get("/health");
+		expect(captured?.url).toBe("https://api.test/v1/health");
+	});
+
+	it("returns parsed body plus response details with requestWithResponse", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "meta",
+					afterResponse(ctx) {
+						return { ...ctx, meta: { ...ctx.meta, source: "test" } };
+					},
+				},
+			],
+			transport: makeTransport(async () => jsonResponse({ ok: true })),
+		});
+
+		const result = await client.requestWithResponse<{ ok: boolean }>("/health");
+
+		expect(result.data.ok).toBe(true);
+		expect(result.response.status).toBe(200);
+		expect(result.request.url).toBe("https://api.test/health");
+		expect(result.meta.source).toBe("test");
+	});
+
 	it("throws ApiError on non-ok response", async () => {
 		const client = new BaseHttpClient({
 			baseUrl: "https://api.test",
@@ -72,10 +108,28 @@ describe("BaseHttpClient", () => {
 	it("throws RateLimitError on 429", async () => {
 		const client = new BaseHttpClient({
 			baseUrl: "https://api.test",
-			transport: makeTransport(async () => new Response(null, { status: 429 })),
+			transport: makeTransport(
+				async () =>
+					new Response(JSON.stringify({ error: "slow down" }), {
+						status: 429,
+						headers: {
+							"content-type": "application/json",
+							"retry-after": "2",
+						},
+					}),
+			),
 		});
 
-		await expect(client.get("/limited")).rejects.toBeInstanceOf(RateLimitError);
+		let caught: RateLimitError | undefined;
+		try {
+			await client.get("/limited");
+		} catch (err) {
+			if (err instanceof RateLimitError) caught = err;
+		}
+
+		expect(caught).toBeInstanceOf(RateLimitError);
+		expect(caught?.retryAfterMs).toBe(2_000);
+		expect(caught?.responseBody).toEqual({ error: "slow down" });
 	});
 
 	it("runs beforeRequest plugin", async () => {
@@ -162,5 +216,15 @@ describe("BaseHttpClient", () => {
 
 		const result = await client.get<{ bare: boolean }>("/");
 		expect(result.bare).toBe(true);
+	});
+
+	it("returns undefined for empty successful responses", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(async () => new Response(null, { status: 204 })),
+		});
+
+		const result = await client.delete("/resource");
+		expect(result).toBeUndefined();
 	});
 });

@@ -33,6 +33,34 @@ describe("cachePlugin", () => {
 		expect(transportCalls).toBe(1);
 	});
 
+	it("marks response meta when serving a cache hit", async () => {
+		const servedFlags: unknown[] = [];
+		const store = new MemoryStore();
+		const cache = createCachePlugin({ store, ttlMs: 60_000 });
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "observer",
+					priority: 10,
+					afterResponse(ctx) {
+						servedFlags.push(ctx.meta["cache.served"]);
+						return ctx;
+					},
+				},
+				cache,
+			],
+			transport: {
+				execute: async () => jsonResponse({ data: "fresh" }),
+			},
+		});
+
+		await client.get("/data");
+		await client.get("/data");
+
+		expect(servedFlags).toEqual([undefined, true]);
+	});
+
 	it("does not cache non-GET requests", async () => {
 		let calls = 0;
 		const store = new MemoryStore();

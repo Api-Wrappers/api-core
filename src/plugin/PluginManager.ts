@@ -43,7 +43,7 @@ export class PluginManager {
 				const result = await plugin.beforeRequest?.(current);
 				if (result != null) current = result;
 			} catch (err) {
-				throw wrapPluginError(plugin.name, "beforeRequest", err);
+				throw wrapPluginError(plugin.name, "beforeRequest", err, current);
 			}
 		}
 		return current;
@@ -91,9 +91,24 @@ export class PluginManager {
 	}
 }
 
-function wrapPluginError(name: string, hook: string, cause: unknown): Error {
+export function getPluginErrorContext(
+	error: unknown,
+): RequestContext | undefined {
+	if (!error || typeof error !== "object") return undefined;
+	return (error as { requestContext?: RequestContext }).requestContext;
+}
+
+function wrapPluginError(
+	name: string,
+	hook: string,
+	cause: unknown,
+	requestContext?: RequestContext,
+): Error {
 	const message = `Plugin "${name}" threw during "${hook}"`;
-	const err = new Error(message, { cause });
+	const err = new Error(message, { cause }) as Error & {
+		requestContext?: RequestContext;
+	};
 	err.name = "PluginError";
+	err.requestContext = requestContext;
 	return err;
 }

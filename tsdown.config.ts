@@ -22,10 +22,6 @@ export default defineConfig({
 	// wrappers that only use a subset of plugins.
 	treeshake: true,
 
-	// Do not bundle peer dependencies (typescript) or anything in
-	// node_modules — consumers bring their own copies.
-	external: [],
-
 	// Targets modern runtimes that have native fetch, Request, Response,
 	// and structuredClone. Adjust down if older Node support is needed.
 	target: "es2020",

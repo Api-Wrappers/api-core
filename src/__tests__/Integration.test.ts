@@ -285,7 +285,10 @@ describe("negative cases", () => {
 			},
 		});
 
-		await expect(client.get("/")).rejects.toThrow("afterResponse explodes");
+		await expect(client.get("/")).rejects.toMatchObject({
+			name: "PluginError",
+			message: expect.stringContaining("bad-after"),
+		});
 		expect(onErrorCalled).toBe(true);
 	});
 

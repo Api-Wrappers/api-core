@@ -34,22 +34,26 @@ export function createCachePlugin(
 					headers: { "content-type": "application/json" },
 				});
 
-				// Attach hit signal so afterResponse can identify the cache hit.
-				ctx.meta[CACHE_HIT_META_KEY] = { key, data: cached };
-
 				// Setting syntheticResponse tells BaseHttpClient to skip the
 				// transport entirely and use this response directly.
-				ctx.syntheticResponse = syntheticResponse;
-
-				return ctx;
+				return {
+					...ctx,
+					meta: {
+						...ctx.meta,
+						[CACHE_HIT_META_KEY]: { key, data: cached },
+					},
+					syntheticResponse,
+				};
 			}
 
-			ctx.meta["cache.key"] = key;
-			return ctx;
+			return {
+				...ctx,
+				meta: { ...ctx.meta, "cache.key": key },
+			};
 		},
 
 		async afterResponse(ctx) {
-			const hit = ctx.meta[CACHE_HIT_META_KEY] as
+			const hit = ctx.request.meta[CACHE_HIT_META_KEY] as
 				| { key: string; data: unknown }
 				| undefined;
 
