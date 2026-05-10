@@ -49,6 +49,8 @@ await client.get("/movies", {
 | `signal` | Caller-provided abort signal. Composes with timeout handling. |
 | `cacheKey` | Explicit key for cache plugins. |
 | `tags` | Labels plugins can use for cache invalidation or metrics. |
+| `responseType` | Override response parsing with `json`, `text`, `arrayBuffer`, or `blob`. Defaults to `auto`. |
+| `errorResponseType` | Override non-2xx body parsing. Defaults to `auto`. |
 
 ## Response Metadata
 
@@ -84,6 +86,19 @@ const games = await client.post<Game[]>(
 		},
 	},
 );
+```
+
+## Binary Responses
+
+Use `responseType: "arrayBuffer"` for endpoints that return binary payloads
+while still going through retries, plugins, timeouts, and the configured
+transport.
+
+```ts
+const bytes = await client.post<ArrayBuffer>("/games.pb", "fields id;", {
+	headers: { accept: "application/octet-stream" },
+	responseType: "arrayBuffer",
+});
 ```
 
 ## Custom Fetch Or Transport

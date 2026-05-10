@@ -94,6 +94,49 @@ describe("BaseHttpClient", () => {
 		expect(result.meta.source).toBe("test");
 	});
 
+	it("returns binary bodies when responseType is arrayBuffer", async () => {
+		const bytes = new Uint8Array([8, 1, 18, 4]);
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(
+				async () =>
+					new Response(bytes, {
+						headers: { "content-type": "application/octet-stream" },
+					}),
+			),
+		});
+
+		const result = await client.post<ArrayBuffer>("/games.pb", "fields id;", {
+			headers: { accept: "application/octet-stream" },
+			responseType: "arrayBuffer",
+		});
+
+		expect([...new Uint8Array(result)]).toEqual([...bytes]);
+	});
+
+	it("keeps non-ok response parsing automatic for binary requests", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(
+				async () =>
+					new Response(JSON.stringify({ message: "bad token" }), {
+						status: 401,
+						headers: { "content-type": "application/json" },
+					}),
+			),
+		});
+
+		try {
+			await client.post<ArrayBuffer>("/games.pb", "fields id;", {
+				responseType: "arrayBuffer",
+			});
+			throw new Error("Expected request to fail");
+		} catch (err) {
+			expect(err).toBeInstanceOf(ApiError);
+			expect((err as ApiError).responseBody).toEqual({ message: "bad token" });
+		}
+	});
+
 	it("throws ApiError on non-ok response", async () => {
 		const client = new BaseHttpClient({
 			baseUrl: "https://api.test",

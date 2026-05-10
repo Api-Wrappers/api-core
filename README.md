@@ -22,6 +22,7 @@ their internal HTTP layer consistent and testable.
 - Built-in auth, cache, logger, rate-limit, retry, and timeout plugins.
 - Fetch transport with JSON bodies, raw string bodies, abort signals, and
   timeout handling.
+- Response parsing for JSON, text, and binary payloads.
 - Query string support for primitives and repeated array values.
 - ESM and CommonJS builds with TypeScript declarations.
 
@@ -166,6 +167,16 @@ const games = await client.post<Game[]>(
 		},
 	},
 );
+```
+
+Binary responses can stay on the shared request path by selecting an explicit
+response type:
+
+```ts
+const bytes = await client.post<ArrayBuffer>("/games.pb", query, {
+	headers: { accept: "application/octet-stream" },
+	responseType: "arrayBuffer",
+});
 ```
 
 ### Response Metadata

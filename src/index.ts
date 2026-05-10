@@ -33,7 +33,11 @@
 
 // ─── Client ───────────────────────────────────────────────────────────────────
 
-export type { ApiResponse, RequestOptions } from "./client/BaseHttpClient";
+export type {
+	ApiResponse,
+	RequestOptions,
+	ResponseType,
+} from "./client/BaseHttpClient";
 export { BaseHttpClient } from "./client/BaseHttpClient";
 export { createClient } from "./client/createClient";
 export type {

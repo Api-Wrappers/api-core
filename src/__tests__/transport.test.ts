@@ -1,7 +1,10 @@
 import { describe, expect, it } from "bun:test";
 import type { RequestContext } from "../context/RequestContext";
 import { TimeoutError } from "../errors/TimeoutError";
-import { createFetchTransport } from "../transport/fetchTransport";
+import {
+	createFetchTransport,
+	fetchTransport,
+} from "../transport/fetchTransport";
 
 function makeCtx(overrides: Partial<RequestContext> = {}): RequestContext {
 	return {
@@ -45,6 +48,24 @@ describe("fetchTransport", () => {
 		);
 
 		expect(captured?.body).toBe('{"query":"query { Viewer { id } }"}');
+	});
+
+	it("resolves the default global fetch at execution time", async () => {
+		const originalFetch = globalThis.fetch;
+		let called = false;
+
+		try {
+			globalThis.fetch = (async () => {
+				called = true;
+				return new Response("{}");
+			}) as typeof fetch;
+
+			await fetchTransport.execute(makeCtx({ body: undefined, method: "GET" }));
+
+			expect(called).toBe(true);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	it("throws TimeoutError when its own timeout aborts the request", async () => {

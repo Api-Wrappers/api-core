@@ -4,6 +4,10 @@ import { buildUrl } from "../utils/buildUrl";
 import { isPlainObject } from "../utils/isPlainObject";
 import type { Transport } from "./types";
 
+const defaultFetch: typeof globalThis.fetch = (input, init) => {
+	return globalThis.fetch(input, init);
+};
+
 /**
  * Creates a {@link Transport} backed by the provided `fetch` function.
  * Use this when you need a polyfill or a custom fetch interceptor:
@@ -16,7 +20,7 @@ import type { Transport } from "./types";
  * ```
  */
 export function createFetchTransport(
-	fetchFn: typeof globalThis.fetch = globalThis.fetch,
+	fetchFn: typeof globalThis.fetch = defaultFetch,
 ): Transport {
 	return {
 		async execute(ctx: RequestContext): Promise<Response> {

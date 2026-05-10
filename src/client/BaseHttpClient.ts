@@ -16,6 +16,8 @@ import { sleep } from "../utils/sleep";
 import type { ClientConfig } from "./types";
 
 /** Per-request options passed to {@link BaseHttpClient.request} and the convenience methods. */
+export type ResponseType = "auto" | "json" | "text" | "arrayBuffer" | "blob";
+
 export interface RequestOptions {
 	/** HTTP method. Defaults to `"GET"`. */
 	method?: HttpMethod;
@@ -50,6 +52,16 @@ export interface RequestOptions {
 	 * these for cache invalidation, metrics grouping, or filtering.
 	 */
 	tags?: string[];
+	/**
+	 * Controls how the response body is parsed. Defaults to content-type based
+	 * parsing: JSON responses become objects, everything else becomes text.
+	 */
+	responseType?: ResponseType;
+	/**
+	 * Optional response parser for non-2xx bodies. Defaults to `"auto"` so APIs
+	 * that return binary success payloads can still surface text/JSON errors.
+	 */
+	errorResponseType?: ResponseType;
 }
 
 export interface ApiResponse<T = unknown> {
@@ -241,7 +253,12 @@ export class BaseHttpClient {
 				}
 			}
 
-			const parsedBody = await parseBody(rawResponse);
+			const parsedBody = await parseBody(
+				rawResponse,
+				rawResponse.ok
+					? options.responseType
+					: (options.errorResponseType ?? "auto"),
+			);
 
 			let resCtx: ResponseContext = {
 				request: ctx,
@@ -438,12 +455,21 @@ export class BaseHttpClient {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function parseBody(response: Response): Promise<unknown> {
+async function parseBody(
+	response: Response,
+	responseType: ResponseType = "auto",
+): Promise<unknown> {
+	if (responseType === "arrayBuffer") return response.arrayBuffer();
+	if (responseType === "blob") return response.blob();
+
 	if (response.status === 204 || response.status === 205) return undefined;
 	if (response.headers.get("content-length") === "0") return undefined;
 
 	const text = await response.text();
+	if (responseType === "text") return text;
 	if (!text) return undefined;
+
+	if (responseType === "json") return JSON.parse(text);
 
 	const contentType = response.headers.get("content-type") ?? "";
 	if (contentType.includes("application/json")) {

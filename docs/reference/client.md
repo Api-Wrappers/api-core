@@ -39,6 +39,18 @@ class MyApiClient extends BaseHttpClient {
 | `init()` | Initialize plugins. Called lazily before the first request. |
 | `dispose()` | Run plugin cleanup hooks. |
 
+## Response Parsing
+
+Requests parse JSON automatically when the response content type is JSON and
+fall back to text for other bodies. Pass `responseType` to override that:
+
+```ts
+await client.get<string>("/robots.txt", { responseType: "text" });
+await client.post<ArrayBuffer>("/games.pb", query, {
+	responseType: "arrayBuffer",
+});
+```
+
 ## `ApiResponse<T>`
 
 Returned by `requestWithResponse`.
