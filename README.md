@@ -1,5 +1,7 @@
 # @api-wrappers/api-core
 
+![GitHub Repo stars](https://img.shields.io/github/stars/api-wrappers/api-core)
+
 Shared TypeScript HTTP runtime for API wrapper libraries.
 
 `@api-wrappers/api-core` gives wrapper packages a small, predictable foundation
@@ -9,8 +11,6 @@ middleware.
 
 It is designed for packages that expose domain-specific clients while keeping
 their internal HTTP layer consistent and testable.
-
-If this runtime saves you time, [star the repo](https://github.com/Api-Wrappers/api-core) to help other TypeScript SDK authors find it.
 
 ## Features
 
