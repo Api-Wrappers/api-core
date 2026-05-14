@@ -1,6 +1,6 @@
 {
 	"name": "@api-wrappers/api-core",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Shared HTTP client runtime for the api-wrappers organisation. Provides request orchestration, a plugin lifecycle, transport abstraction, and built-in cache/retry/logger plugins.",
 	"repository": {
 		"type": "git",
@@ -69,6 +69,6 @@
 		"typescript": "^5.9.3"
 	},
 	"peerDependencies": {
-		"typescript": "^5"
+		"typescript": "^5 || ^6"
 	}
 }

@@ -10,6 +10,8 @@ middleware.
 It is designed for packages that expose domain-specific clients while keeping
 their internal HTTP layer consistent and testable.
 
+If this runtime saves you time, [star the repo](https://github.com/Api-Wrappers/api-core) to help other TypeScript SDK authors find it.
+
 ## Features
 
 - Typed REST helpers: `get`, `post`, `put`, `patch`, `delete`, `head`,

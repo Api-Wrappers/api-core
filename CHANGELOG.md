@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.2 - 2026-05-14
+
+- Broadened the TypeScript peer dependency range to support TypeScript 6.
+- Added clearer README guidance for developers building wrapper libraries.
+
 ## 1.0.1 - 2026-05-14
 
 - Fixed cache keys so array and nullish query params match the actual transport URL serialization.
