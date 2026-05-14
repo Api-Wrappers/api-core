@@ -4,11 +4,11 @@
 	"description": "Shared HTTP client runtime for the api-wrappers organisation. Provides request orchestration, a plugin lifecycle, transport abstraction, and built-in cache/retry/logger plugins.",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/TDanks2000/api-core"
+		"url": "https://github.com/Api-Wrappers/api-core"
 	},
-	"homepage": "https://github.com/TDanks2000/api-core#readme",
+	"homepage": "https://github.com/Api-Wrappers/api-core#readme",
 	"bugs": {
-		"url": "https://github.com/TDanks2000/api-core/issues"
+		"url": "https://github.com/Api-Wrappers/api-core/issues"
 	},
 	"type": "module",
 	"packageManager": "bun@1.3.13",
