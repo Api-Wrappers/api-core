@@ -40,21 +40,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Check formatting and lint
-        run: bun run check:ci
-
-      - name: Run tests
-        run: bun test
-
-      - name: Build package
-        run: bun run build
+      - name: Verify package
+        run: bun run verify
 
       - name: Smoke test built entrypoints
         run: |
           node --input-type=module -e "const m = await import('./dist/index.mjs'); if (typeof m.createClient !== 'function') throw new Error('missing ESM createClient')"
           node -e "const m = require('./dist/index.cjs'); if (typeof m.createClient !== 'function') throw new Error('missing CJS createClient')"
 
-      - name: Verify package contents
+      - name: Verify npm package contents
         run: npm pack --dry-run --json
 
       - name: Pack artifact

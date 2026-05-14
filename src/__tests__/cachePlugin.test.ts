@@ -80,6 +80,65 @@ describe("cachePlugin", () => {
 
 		expect(calls).toBe(2);
 	});
+
+	it("uses transport-equivalent query serialization for default keys", async () => {
+		let calls = 0;
+		const store = new MemoryStore();
+		const cache = createCachePlugin({ store });
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [cache],
+			transport: {
+				execute: async () => {
+					calls++;
+					return jsonResponse({ calls });
+				},
+			},
+		});
+
+		await client.get("/search", {
+			query: { genre: [1, 2], ignored: null },
+		});
+		const second = await client.get<{ calls: number }>("/search", {
+			query: { genre: [1, 2] },
+		});
+
+		expect(second.calls).toBe(1);
+		expect(calls).toBe(1);
+
+		await cache.invalidate("GET:https://api.test/search?genre=1&genre=2");
+		await client.get("/search", { query: { genre: [1, 2] } });
+		expect(calls).toBe(2);
+	});
+
+	it("serves cached values that cannot be JSON stringified", async () => {
+		let calls = 0;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "bigint-transform",
+					priority: 30,
+					afterResponse(ctx) {
+						return { ...ctx, parsedBody: 1n };
+					},
+				},
+				createCachePlugin(),
+			],
+			transport: {
+				execute: async () => {
+					calls++;
+					return jsonResponse({ value: calls });
+				},
+			},
+		});
+
+		await client.get("/data");
+		const second = await client.get<bigint>("/data");
+
+		expect(second).toBe(1n);
+		expect(calls).toBe(1);
+	});
 });
 
 describe("MemoryStore", () => {

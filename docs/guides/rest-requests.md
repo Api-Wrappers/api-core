@@ -52,6 +52,10 @@ await client.get("/movies", {
 | `responseType` | Override response parsing with `json`, `text`, `arrayBuffer`, or `blob`. Defaults to `auto`. |
 | `errorResponseType` | Override non-2xx body parsing. Defaults to `auto`. |
 
+`headers` and `defaultHeaders` accept any `HeadersInit` shape: plain objects,
+native `Headers`, or `[name, value]` tuples. Header names are normalized
+case-insensitively before the request reaches plugins or transports.
+
 ## Response Metadata
 
 Use `requestWithResponse` when the wrapper needs headers, status, request data,

@@ -75,6 +75,21 @@ describe("mergeHeaders", () => {
 		const result = mergeHeaders({ a: "1" }, undefined, { b: "2" });
 		expect(result).toEqual({ a: "1", b: "2" });
 	});
+
+	it("accepts Headers instances and tuple arrays", () => {
+		const headers = new Headers({
+			"X-From-Headers": "yes",
+			"X-Custom": "old",
+		});
+		const result = mergeHeaders(headers, [
+			["X-Custom", "new"],
+			["Accept", "application/json"],
+		]);
+
+		expect(result["x-from-headers"]).toBe("yes");
+		expect(result["x-custom"]).toBe("new");
+		expect(result.accept).toBe("application/json");
+	});
 });
 
 describe("isPlainObject", () => {

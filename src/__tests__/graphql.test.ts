@@ -159,6 +159,45 @@ describe("BaseHttpClient.graphql()", () => {
 		expect(captured?.headers["content-type"]).toBe("application/json");
 	});
 
+	it("keeps GraphQL content-type JSON when caller headers include another value", async () => {
+		let captured: RequestContext | undefined;
+
+		const client = new BaseHttpClient({
+			baseUrl: BASE,
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({ data: {} });
+			}),
+		});
+
+		await client.graphql(PATH, {
+			query: QUERY,
+			headers: { "Content-Type": "text/plain" },
+		});
+
+		expect(captured?.headers["content-type"]).toBe("application/json");
+	});
+
+	it("accepts native HeadersInit values for GraphQL headers", async () => {
+		let captured: RequestContext | undefined;
+
+		const client = new BaseHttpClient({
+			baseUrl: BASE,
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({ data: {} });
+			}),
+		});
+
+		await client.graphql(PATH, {
+			query: QUERY,
+			headers: new Headers({ "X-GraphQL-Client": "test" }),
+		});
+
+		expect(captured?.headers["x-graphql-client"]).toBe("test");
+		expect(captured?.headers["content-type"]).toBe("application/json");
+	});
+
 	it("merges per-request headers over defaultHeaders", async () => {
 		let captured: RequestContext | undefined;
 

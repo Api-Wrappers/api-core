@@ -54,6 +54,14 @@ export type { ResponseContext } from "./context/ResponseContext";
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
 export { ApiError } from "./errors/ApiError";
+export type { ApiCoreError } from "./errors/guards";
+export {
+	isApiCoreError,
+	isApiError,
+	isGraphQLRequestError,
+	isRateLimitError,
+	isTimeoutError,
+} from "./errors/guards";
 export { RateLimitError } from "./errors/RateLimitError";
 export { TimeoutError } from "./errors/TimeoutError";
 
@@ -101,11 +109,12 @@ export {
 	createFetchTransport,
 	fetchTransport,
 } from "./transport/fetchTransport";
-export type { Transport } from "./transport/types";
+export type { FetchLike, Transport } from "./transport/types";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 export type {
+	HeaderInput,
 	HttpMethod,
 	MaybePromise,
 	QueryParams,

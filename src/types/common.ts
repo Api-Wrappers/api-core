@@ -1,5 +1,7 @@
 export type MaybePromise<T> = T | Promise<T>;
 
+export type HeaderInput = HeadersInit;
+
 export type HttpMethod =
 	| "GET"
 	| "POST"

@@ -65,6 +65,7 @@ describe("combined plugins: cache + logger + retry", () => {
 
 	it("retryPlugin overrides maxAttempts per-request on top of cache+logger", async () => {
 		let calls = 0;
+		const retryCounts: number[] = [];
 		const client = new BaseHttpClient({
 			baseUrl: "https://api.test",
 			retry: { maxAttempts: 1, delayMs: 0, jitter: false }, // default: no retry
@@ -75,7 +76,8 @@ describe("combined plugins: cache + logger + retry", () => {
 				createRetryPlugin({ maxAttempts: 3, delayMs: 0, jitter: false }),
 			],
 			transport: {
-				execute: async () => {
+				execute: async (ctx) => {
+					retryCounts.push(ctx.retryCount);
 					calls++;
 					if (calls < 3) return new Response(null, { status: 503 });
 					return jsonResponse({ ok: true });
@@ -85,6 +87,7 @@ describe("combined plugins: cache + logger + retry", () => {
 
 		const result = await client.get<{ ok: boolean }>("/unstable");
 		expect(calls).toBe(3);
+		expect(retryCounts).toEqual([2, 1, 0]);
 		expect(result.ok).toBe(true);
 	});
 });
@@ -263,6 +266,34 @@ describe("negative cases", () => {
 		expect((caught?.responseBody as Record<string, string>).code).toBe(
 			"NOT_FOUND",
 		);
+	});
+
+	it("parses structured JSON error response types", async () => {
+		const problem = {
+			type: "https://api.test/problems/not-found",
+			title: "Not Found",
+		};
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: {
+				execute: async () =>
+					new Response(JSON.stringify(problem), {
+						status: 404,
+						headers: {
+							"content-type": "application/problem+json; charset=utf-8",
+						},
+					}),
+			},
+		});
+
+		let caught: ApiError | undefined;
+		try {
+			await client.get("/missing");
+		} catch (err) {
+			if (err instanceof ApiError) caught = err;
+		}
+
+		expect(caught?.responseBody).toEqual(problem);
 	});
 
 	it("plugin throwing in afterResponse propagates and calls onError", async () => {

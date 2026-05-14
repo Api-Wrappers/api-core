@@ -1,4 +1,5 @@
 import type { RequestContext } from "../../context/RequestContext";
+import { buildUrl } from "../../utils/buildUrl";
 import { MemoryStore } from "./memoryStore";
 import type { CachePlugin, CachePluginOptions } from "./types";
 
@@ -29,7 +30,7 @@ export function createCachePlugin(
 			if (cached !== undefined) {
 				// Build a synthetic Response so the rest of the pipeline
 				// (afterResponse, status checks) sees a uniform shape.
-				const syntheticResponse = new Response(JSON.stringify(cached), {
+				const syntheticResponse = new Response(serializeCachedBody(cached), {
 					status: 200,
 					headers: { "content-type": "application/json" },
 				});
@@ -104,14 +105,13 @@ export function createCachePlugin(
 }
 
 function defaultCacheKey(ctx: RequestContext): string {
-	const queryStr = ctx.query
-		? new URLSearchParams(
-				Object.fromEntries(
-					Object.entries(ctx.query)
-						.filter(([, v]) => v !== undefined)
-						.map(([k, v]) => [k, String(v)]),
-				),
-			).toString()
-		: "";
-	return `${ctx.method}:${ctx.url}${queryStr ? `?${queryStr}` : ""}`;
+	return `${ctx.method}:${buildUrl(ctx.url, ctx.query)}`;
+}
+
+function serializeCachedBody(value: unknown): BodyInit | null {
+	try {
+		return JSON.stringify(value) ?? null;
+	} catch {
+		return null;
+	}
 }

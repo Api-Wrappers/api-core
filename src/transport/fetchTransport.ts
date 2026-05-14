@@ -1,10 +1,11 @@
 import type { RequestContext } from "../context/RequestContext";
 import { TimeoutError } from "../errors/TimeoutError";
 import { buildUrl } from "../utils/buildUrl";
+import { isJsonContentType } from "../utils/isJsonContentType";
 import { isPlainObject } from "../utils/isPlainObject";
-import type { Transport } from "./types";
+import type { FetchLike, Transport } from "./types";
 
-const defaultFetch: typeof globalThis.fetch = (input, init) => {
+const defaultFetch: FetchLike = (input, init) => {
 	return globalThis.fetch(input, init);
 };
 
@@ -14,13 +15,13 @@ const defaultFetch: typeof globalThis.fetch = (input, init) => {
  *
  * ```ts
  * import nodeFetch from "node-fetch";
- * createClient({ fetch: nodeFetch as typeof globalThis.fetch });
+ * createClient({ fetch: nodeFetch as FetchLike });
  * // — or set it directly on the transport:
- * const transport = createFetchTransport(nodeFetch as typeof globalThis.fetch);
+ * const transport = createFetchTransport(nodeFetch as FetchLike);
  * ```
  */
 export function createFetchTransport(
-	fetchFn: typeof globalThis.fetch = defaultFetch,
+	fetchFn: FetchLike = defaultFetch,
 ): Transport {
 	return {
 		async execute(ctx: RequestContext): Promise<Response> {
@@ -100,11 +101,10 @@ function serializeRequestBody(
 ): BodyInit {
 	if (isBodyInit(body)) return body;
 
-	const contentType = headers["content-type"] ?? "";
 	if (
 		isPlainObject(body) ||
 		Array.isArray(body) ||
-		contentType.includes("json")
+		isJsonContentType(headers["content-type"])
 	) {
 		return JSON.stringify(body);
 	}

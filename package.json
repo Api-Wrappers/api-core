@@ -1,12 +1,17 @@
 {
 	"name": "@api-wrappers/api-core",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Shared HTTP client runtime for the api-wrappers organisation. Provides request orchestration, a plugin lifecycle, transport abstraction, and built-in cache/retry/logger plugins.",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/Api-Wrappers/api-core"
+		"url": "https://github.com/TDanks2000/api-core"
+	},
+	"homepage": "https://github.com/TDanks2000/api-core#readme",
+	"bugs": {
+		"url": "https://github.com/TDanks2000/api-core/issues"
 	},
 	"type": "module",
+	"packageManager": "bun@1.3.13",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.mjs",
 	"types": "./dist/index.d.mts",
@@ -20,11 +25,14 @@
 				"types": "./dist/index.d.cts",
 				"default": "./dist/index.cjs"
 			}
-		}
+		},
+		"./package.json": "./package.json"
 	},
+	"sideEffects": false,
 	"files": [
 		"dist",
-		"docs"
+		"docs",
+		"CHANGELOG.md"
 	],
 	"keywords": [
 		"http",
@@ -41,8 +49,15 @@
 	"scripts": {
 		"build": "tsdown",
 		"test": "bun test",
+		"typecheck": "tsc --noEmit",
 		"check": "biome check --write .",
-		"check:ci": "biome check ."
+		"check:ci": "biome check .",
+		"pack:dry-run": "bun pm pack --dry-run",
+		"verify": "bun run check:ci && bun run typecheck && bun test && bun run build && bun run pack:dry-run",
+		"prepack": "bun run build"
+	},
+	"engines": {
+		"node": ">=18"
 	},
 	"publishConfig": {
 		"access": "public"
@@ -50,7 +65,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.4.9",
 		"@types/bun": "1.3.11",
-		"tsdown": "0.21.7"
+		"tsdown": "0.21.7",
+		"typescript": "^5.9.3"
 	},
 	"peerDependencies": {
 		"typescript": "^5"

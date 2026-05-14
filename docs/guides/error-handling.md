@@ -16,22 +16,22 @@ GraphQL application errors.
 
 ```ts
 import {
-	ApiError,
-	GraphQLRequestError,
-	RateLimitError,
-	TimeoutError,
+	isApiError,
+	isGraphQLRequestError,
+	isRateLimitError,
+	isTimeoutError,
 } from "@api-wrappers/api-core";
 
 try {
 	await client.get("/resource");
 } catch (error) {
-	if (error instanceof RateLimitError) {
+	if (isRateLimitError(error)) {
 		console.log("retry after", error.retryAfterMs);
-	} else if (error instanceof TimeoutError) {
+	} else if (isTimeoutError(error)) {
 		console.log("request timed out");
-	} else if (error instanceof GraphQLRequestError) {
+	} else if (isGraphQLRequestError(error)) {
 		console.log(error.graphqlErrors);
-	} else if (error instanceof ApiError) {
+	} else if (isApiError(error)) {
 		console.log(error.status, error.responseBody);
 	}
 }
@@ -46,7 +46,7 @@ on `error.responseBody`.
 try {
 	await client.get("/missing");
 } catch (error) {
-	if (error instanceof ApiError) {
+	if (isApiError(error)) {
 		console.log(error.status);
 		console.log(error.responseBody);
 	}
@@ -58,7 +58,7 @@ try {
 `RateLimitError.retryAfterMs` is set when the server provides `retry-after`.
 
 ```ts
-if (error instanceof RateLimitError && error.retryAfterMs) {
+if (isRateLimitError(error) && error.retryAfterMs) {
 	await sleep(error.retryAfterMs);
 }
 ```

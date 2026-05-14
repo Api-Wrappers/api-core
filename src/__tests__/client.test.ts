@@ -44,6 +44,28 @@ describe("BaseHttpClient", () => {
 		expect(captured?.headers["x-api-key"]).toBe("secret");
 	});
 
+	it("accepts native HeadersInit values for default and request headers", async () => {
+		let captured: RequestContext | undefined;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			defaultHeaders: new Headers({ "X-Default": "base" }),
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({});
+			}),
+		});
+
+		await client.get("/", {
+			headers: [
+				["X-Default", "override"],
+				["X-Request", "local"],
+			],
+		});
+
+		expect(captured?.headers["x-default"]).toBe("override");
+		expect(captured?.headers["x-request"]).toBe("local");
+	});
+
 	it("passes query params through to transport", async () => {
 		let captured: RequestContext | undefined;
 		const client = new BaseHttpClient({
@@ -213,6 +235,28 @@ describe("BaseHttpClient", () => {
 		expect(result.transformed).toBe(true);
 	});
 
+	it("uses the response returned by afterResponse for status handling", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "fallback",
+					afterResponse(ctx) {
+						return {
+							...ctx,
+							response: jsonResponse({ recovered: true }),
+							parsedBody: { recovered: true },
+						};
+					},
+				},
+			],
+			transport: makeTransport(async () => new Response(null, { status: 503 })),
+		});
+
+		const result = await client.get<{ recovered: boolean }>("/");
+		expect(result.recovered).toBe(true);
+	});
+
 	it("retries on retriable status codes", async () => {
 		let calls = 0;
 		const client = new BaseHttpClient({
@@ -228,6 +272,22 @@ describe("BaseHttpClient", () => {
 		const result = await client.get<{ ok: boolean }>("/");
 		expect(calls).toBe(3);
 		expect(result.ok).toBe(true);
+	});
+
+	it("treats retry maxAttempts below one as a single attempt", async () => {
+		let calls = 0;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			retry: { maxAttempts: 0, delayMs: 0, jitter: false },
+			transport: makeTransport(async () => {
+				calls++;
+				return jsonResponse({ ok: true });
+			}),
+		});
+
+		const result = await client.get<{ ok: boolean }>("/");
+		expect(result.ok).toBe(true);
+		expect(calls).toBe(1);
 	});
 
 	it("calls onError plugin when transport throws", async () => {

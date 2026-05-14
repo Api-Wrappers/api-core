@@ -50,6 +50,23 @@ describe("fetchTransport", () => {
 		expect(captured?.body).toBe('{"query":"query { Viewer { id } }"}');
 	});
 
+	it("detects structured JSON content types case-insensitively", async () => {
+		let captured: RequestInit | undefined;
+		const transport = createFetchTransport(async (_url, init) => {
+			captured = init;
+			return new Response("{}");
+		});
+
+		await transport.execute(
+			makeCtx({
+				headers: { "content-type": "Application/Problem+JSON" },
+				body: new Date("2020-01-01T00:00:00.000Z"),
+			}),
+		);
+
+		expect(captured?.body).toBe('"2020-01-01T00:00:00.000Z"');
+	});
+
 	it("resolves the default global fetch at execution time", async () => {
 		const originalFetch = globalThis.fetch;
 		let called = false;
@@ -58,7 +75,7 @@ describe("fetchTransport", () => {
 			globalThis.fetch = (async () => {
 				called = true;
 				return new Response("{}");
-			}) as typeof fetch;
+			}) as unknown as typeof fetch;
 
 			await fetchTransport.execute(makeCtx({ body: undefined, method: "GET" }));
 

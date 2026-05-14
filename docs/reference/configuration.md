@@ -5,10 +5,10 @@
 ```ts
 interface ClientConfig {
 	baseUrl: string;
-	defaultHeaders?: Record<string, string>;
+	defaultHeaders?: HeaderInput;
 	plugins?: ApiPlugin[];
 	transport?: Transport;
-	fetch?: typeof globalThis.fetch;
+	fetch?: FetchLike;
 	timeoutMs?: number;
 	retry?: RetryConfig;
 	logger?: LoggerInterface;
@@ -31,7 +31,7 @@ interface ClientConfig {
 ```ts
 interface RequestOptions {
 	method?: HttpMethod;
-	headers?: Record<string, string>;
+	headers?: HeaderInput;
 	body?: unknown;
 	query?: QueryParams;
 	signal?: AbortSignal;
@@ -48,7 +48,7 @@ interface GraphQLRequestOptions<TVariables extends object = Record<string, unkno
 	query: string;
 	variables?: TVariables;
 	operationName?: string;
-	headers?: Record<string, string>;
+	headers?: HeaderInput;
 	signal?: AbortSignal;
 	timeoutMs?: number;
 	cacheKey?: string;
@@ -72,6 +72,13 @@ interface RetryConfig {
 ## Query Types
 
 ```ts
+type HeaderInput = HeadersInit;
+
+type FetchLike = (
+	input: string | URL | Request,
+	init?: RequestInit,
+) => Promise<Response>;
+
 type QueryPrimitive = string | number | boolean;
 
 type QueryValue =
@@ -85,6 +92,10 @@ type QueryParams = Record<string, QueryValue>;
 
 Nullish query values are skipped. Array query values are emitted as repeated
 query parameters.
+
+Headers accept the same shapes as `fetch`: a plain object, a `Headers`
+instance, or `[name, value]` tuples. Header names are normalized to lowercase
+internally and later sources override earlier sources case-insensitively.
 
 ## `Transport`
 

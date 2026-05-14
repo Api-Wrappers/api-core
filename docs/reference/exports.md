@@ -21,6 +21,12 @@
 - `RateLimitError`
 - `TimeoutError`
 - `GraphQLRequestError`
+- `ApiCoreError`
+- `isApiCoreError`
+- `isApiError`
+- `isGraphQLRequestError`
+- `isRateLimitError`
+- `isTimeoutError`
 
 ## Plugin System
 
@@ -55,12 +61,14 @@
 ## Transport
 
 - `Transport`
+- `FetchLike`
 - `createFetchTransport`
 - `fetchTransport`
 
 ## Shared Types
 
 - `HttpMethod`
+- `HeaderInput`
 - `MaybePromise`
 - `QueryParams`
 - `QueryPrimitive`

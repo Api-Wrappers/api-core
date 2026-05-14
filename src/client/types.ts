@@ -1,5 +1,6 @@
 import type { ApiPlugin } from "../plugin/types";
-import type { Transport } from "../transport/types";
+import type { FetchLike, Transport } from "../transport/types";
+import type { HeaderInput } from "../types/common";
 
 /**
  * Minimal logger interface accepted by {@link ClientConfig.logger} and
@@ -49,7 +50,7 @@ export interface ClientConfig {
 	 * precedence. `content-type: application/json` is always present as the
 	 * lowest-priority default.
 	 */
-	defaultHeaders?: Record<string, string>;
+	defaultHeaders?: HeaderInput;
 	/** Plugins registered for the lifetime of this client. */
 	plugins?: ApiPlugin[];
 	/**
@@ -64,7 +65,7 @@ export interface ClientConfig {
 	 * Ignored when a custom `transport` is provided.
 	 * @example `import fetch from "node-fetch"; createClient({ fetch })`
 	 */
-	fetch?: typeof globalThis.fetch;
+	fetch?: FetchLike;
 	/**
 	 * Default request timeout in ms. Overridable per-request via
 	 * `RequestOptions.timeoutMs`. Throws {@link TimeoutError} when exceeded.

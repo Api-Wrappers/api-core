@@ -9,8 +9,10 @@ import {
 	createFetchTransport,
 	fetchTransport,
 } from "../transport/fetchTransport";
-import type { HttpMethod, QueryParams } from "../types/common";
+import type { HeaderInput, HttpMethod, QueryParams } from "../types/common";
+import { isJsonContentType } from "../utils/isJsonContentType";
 import { mergeHeaders } from "../utils/mergeHeaders";
+import { normalizeRetryMaxAttempts } from "../utils/normalizeRetryMaxAttempts";
 import { resolveUrl } from "../utils/resolveUrl";
 import { sleep } from "../utils/sleep";
 import type { ClientConfig } from "./types";
@@ -26,7 +28,7 @@ export interface RequestOptions {
 	 * These take precedence; `content-type: application/json` is always
 	 * present and is the lowest-priority default.
 	 */
-	headers?: Record<string, string>;
+	headers?: HeaderInput;
 	/** Request body. Serialised to JSON by {@link fetchTransport}. Ignored for GET and HEAD. */
 	body?: unknown;
 	/**
@@ -179,7 +181,7 @@ export class BaseHttpClient {
 		const retryCfg = this.config.retry;
 		// These are `let` so createRetryPlugin can override them per-request via
 		// ctx.meta after beforeRequest runs (see merge block below).
-		let maxAttempts = retryCfg?.maxAttempts ?? 1;
+		let maxAttempts = normalizeRetryMaxAttempts(retryCfg?.maxAttempts);
 		let baseDelay = retryCfg?.delayMs ?? 500;
 		let jitter = retryCfg?.jitter ?? true;
 		let retriableCodes =
@@ -224,14 +226,22 @@ export class BaseHttpClient {
 			// Because the for-loop condition re-evaluates `attempt < maxAttempts`
 			// on every iteration, updating maxAttempts here takes effect
 			// immediately for all remaining attempts.
-			if (ctx.meta["retry.maxAttempts"] !== undefined)
-				maxAttempts = ctx.meta["retry.maxAttempts"] as number;
+			if (ctx.meta["retry.maxAttempts"] !== undefined) {
+				maxAttempts = normalizeRetryMaxAttempts(
+					ctx.meta["retry.maxAttempts"] as number,
+				);
+			}
 			if (ctx.meta["retry.delayMs"] !== undefined)
 				baseDelay = ctx.meta["retry.delayMs"] as number;
 			if (ctx.meta["retry.jitter"] !== undefined)
 				jitter = ctx.meta["retry.jitter"] as boolean;
 			if (ctx.meta["retry.retriableStatusCodes"] !== undefined)
 				retriableCodes = ctx.meta["retry.retriableStatusCodes"] as number[];
+
+			const retryCount = maxAttempts - 1 - attempt;
+			if (ctx.retryCount !== retryCount) {
+				ctx = { ...ctx, retryCount };
+			}
 
 			let rawResponse: Response;
 			if (ctx.syntheticResponse) {
@@ -274,23 +284,25 @@ export class BaseHttpClient {
 				throw err;
 			}
 
-			if (!rawResponse.ok) {
+			const finalResponse = resCtx.response;
+
+			if (!finalResponse.ok) {
 				const shouldRetry =
-					retriableCodes.includes(rawResponse.status) &&
+					retriableCodes.includes(finalResponse.status) &&
 					attempt < maxAttempts - 1;
 
 				if (shouldRetry) {
-					if (rawResponse.status === 429) {
-						const wait = readRetryAfterMs(rawResponse);
+					if (finalResponse.status === 429) {
+						const wait = readRetryAfterMs(finalResponse);
 						await this.waitForRetry(attempt, wait ?? baseDelay, false);
 					} else {
 						await this.waitForRetry(attempt, baseDelay, jitter);
 					}
-					lastError = normalizeHttpError(rawResponse, resCtx.parsedBody);
+					lastError = normalizeHttpError(finalResponse, resCtx.parsedBody);
 					continue;
 				}
 
-				const err = normalizeHttpError(rawResponse, resCtx.parsedBody);
+				const err = normalizeHttpError(finalResponse, resCtx.parsedBody);
 				await this.pluginManager.onError(err, ctx);
 				throw err;
 			}
@@ -420,7 +432,7 @@ export class BaseHttpClient {
 				...(variables !== undefined && { variables }),
 				...(operationName !== undefined && { operationName }),
 			},
-			headers,
+			headers: mergeHeaders(headers, { "content-type": "application/json" }),
 			signal,
 			timeoutMs,
 			cacheKey,
@@ -471,8 +483,7 @@ async function parseBody(
 
 	if (responseType === "json") return JSON.parse(text);
 
-	const contentType = response.headers.get("content-type") ?? "";
-	if (contentType.includes("application/json")) {
+	if (isJsonContentType(response.headers.get("content-type"))) {
 		return JSON.parse(text);
 	}
 	return text;

@@ -1,3 +1,5 @@
+import type { HeaderInput } from "../types/common";
+
 /**
  * The shape of a single error object inside a GraphQL `errors` array,
  * as specified by the GraphQL over HTTP specification.
@@ -53,7 +55,7 @@ export interface GraphQLRequestOptions<
 	 * Additional headers merged on top of `ClientConfig.defaultHeaders` for
 	 * this request only. `content-type: application/json` is always set.
 	 */
-	headers?: Record<string, string>;
+	headers?: HeaderInput;
 	/**
 	 * Optional caller-provided abort signal. Composes with `timeoutMs`.
 	 */

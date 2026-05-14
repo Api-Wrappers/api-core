@@ -1,4 +1,5 @@
 import type { ApiPlugin } from "../../plugin/types";
+import { normalizeRetryMaxAttempts } from "../../utils/normalizeRetryMaxAttempts";
 import type { RetryPluginOptions } from "./types";
 
 /**
@@ -12,18 +13,23 @@ export function createRetryPlugin(options: RetryPluginOptions = {}): ApiPlugin {
 		priority: 5,
 
 		beforeRequest(ctx) {
+			const meta = { ...ctx.meta };
+			let retryCount = ctx.retryCount;
+
 			// Only write keys for values the caller explicitly provided.
 			// Unset options fall through to ClientConfig.retry defaults inside
 			// BaseHttpClient, so the plugin does not need to supply fallbacks.
-			if (options.maxAttempts !== undefined)
-				ctx.meta["retry.maxAttempts"] = options.maxAttempts;
+			if (options.maxAttempts !== undefined) {
+				meta["retry.maxAttempts"] = options.maxAttempts;
+				retryCount =
+					normalizeRetryMaxAttempts(options.maxAttempts) - 1 - ctx.attempt;
+			}
 			if (options.delayMs !== undefined)
-				ctx.meta["retry.delayMs"] = options.delayMs;
-			if (options.jitter !== undefined)
-				ctx.meta["retry.jitter"] = options.jitter;
+				meta["retry.delayMs"] = options.delayMs;
+			if (options.jitter !== undefined) meta["retry.jitter"] = options.jitter;
 			if (options.retriableStatusCodes !== undefined)
-				ctx.meta["retry.retriableStatusCodes"] = options.retriableStatusCodes;
-			return ctx;
+				meta["retry.retriableStatusCodes"] = options.retriableStatusCodes;
+			return { ...ctx, meta, retryCount };
 		},
 	};
 }
