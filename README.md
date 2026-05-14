@@ -1,8 +1,15 @@
-# @api-wrappers/api-core
+<h1 align="center">@api-wrappers/api-core</h1>
 
-![GitHub Repo stars](https://img.shields.io/github/stars/api-wrappers/api-core)
+<p align="center">
+  Shared TypeScript HTTP runtime for API wrapper libraries.
+</p>
 
-Shared TypeScript HTTP runtime for API wrapper libraries.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@api-wrappers/api-core"><img alt="npm version" src="https://img.shields.io/npm/v/@api-wrappers/api-core"></a>
+  <a href="https://github.com/Api-Wrappers/api-core/blob/main/LICENSE"><img alt="license" src="https://img.shields.io/npm/l/@api-wrappers/api-core"></a>
+  <a href="https://github.com/Api-Wrappers/api-core/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Api-Wrappers/api-core/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/Api-Wrappers/api-core/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/api-wrappers/api-core"></a>
+</p>
 
 `@api-wrappers/api-core` gives wrapper packages a small, predictable foundation
 for request execution, retries, timeouts, auth headers, caching, rate limiting,
