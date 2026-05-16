@@ -1,12 +1,13 @@
 # Release Workflow
 
-Releases are published by `.github/workflows/release.yml` when a semver tag is
-pushed, for example `v1.2.3`.
+Releases are managed with Changesets and `.github/workflows/release.yml`.
+Publishing only runs from `main`; pull requests never publish.
 
 ## npm Trusted Publishing
 
-The release workflow is designed for npm Trusted Publishing with OIDC. It does
-not use `NPM_TOKEN`.
+The release workflow is designed for npm Trusted Publishing with OIDC and npm
+provenance. It does not require `NPM_TOKEN` when trusted publishing is
+configured.
 
 Configure the package on npmjs.com:
 
@@ -18,25 +19,30 @@ Configure the package on npmjs.com:
 6. After a successful trusted publish, set publishing access to require 2FA and
    disallow traditional tokens.
 
-The workflow grants `id-token: write`, uses Node.js 24, and verifies the npm CLI
-is at least `11.5.1`, matching npm's trusted publishing requirements.
-GitHub Actions are pinned to current release tags rather than deprecated major
+The workflow grants `id-token: write`, uses Node.js 24, verifies the npm CLI is
+at least `11.5.1`, and publishes with `npm publish --provenance`. GitHub
+Actions are pinned to current release tags rather than deprecated major
 versions. Dependabot is configured to keep workflow action pins current.
+
+If trusted publishing is not available, use `NPM_TOKEN` as the repository secret
+name and wire it to `NODE_AUTH_TOKEN` before publishing.
 
 ## Release Steps
 
-1. Update `package.json` version.
-2. Commit the version change.
-3. Create and push a matching tag:
+1. Add a changeset for user-facing changes:
 
 ```bash
-git tag v1.2.3
-git push origin v1.2.3
+bun run changeset
 ```
 
-The workflow checks that `package.json` version matches the tag without the
-leading `v`, runs lint/tests/build, verifies package contents, publishes to npm,
-and creates a GitHub release with generated notes.
+2. Merge the change to `main`.
+3. The release workflow validates the package and opens a Changesets version PR.
+4. Review and merge the version PR.
+5. The next `main` run validates again, publishes to npm with provenance, and
+   creates GitHub release notes.
+
+Maintainers can manually run the release workflow with `dry_run: true` to verify
+the install, validation, and package dry-run steps without publishing.
 
 ## CI Workflow
 

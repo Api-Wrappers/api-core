@@ -11,15 +11,59 @@
   <a href="https://github.com/Api-Wrappers/api-core/stargazers"><img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/api-wrappers/api-core"></a>
 </p>
 
-`@api-wrappers/api-core` gives wrapper packages a small, predictable foundation
-for request execution, retries, timeouts, auth headers, caching, rate limiting,
+`@api-wrappers/api-core` is the shared runtime that powers the Api-Wrappers
+package ecosystem. It gives wrapper packages a small, predictable foundation for
+request execution, retries, timeouts, auth headers, caching, rate limiting,
 GraphQL requests, custom transports, and plugin-based request/response
 middleware.
 
-It is designed for packages that expose domain-specific clients while keeping
-their internal HTTP layer consistent and testable.
+This package exists so each wrapper does not need to reimplement fetch handling,
+error parsing, retry behavior, timeout behavior, auth headers, cache hooks, or
+test transports. Wrapper packages can focus on domain-specific endpoints and
+types while sharing one maintained HTTP layer.
 
-## Features
+## Why use this?
+
+- Keep REST and GraphQL wrappers on one consistent request pipeline.
+- Reuse battle-tested auth, retry, timeout, cache, logger, and rate-limit
+  plugins instead of rewriting them per API.
+- Make wrapper clients easier to test by swapping `fetch` or the full
+  `Transport`.
+- Preserve strict TypeScript types while still handling unknown runtime errors
+  through exported error classes and guards.
+- Support Node, Bun, browsers, and edge runtimes without committing wrappers to
+  one server environment.
+- Give contributors one runtime contract to understand before improving any
+  wrapper package.
+
+## Used by
+
+`api-core` is intended to be the foundation under Api-Wrappers packages such as:
+
+- [`@api-wrappers/tmdb-wrapper`](https://github.com/Api-Wrappers/tmdb-wrapper)
+- [`@api-wrappers/trakt-wrapper`](https://github.com/Api-Wrappers/trakt-wrapper)
+- [`@api-wrappers/igdb-wrapper`](https://github.com/Api-Wrappers/igdb-wrapper)
+- [`@api-wrappers/anilist-wrapper`](https://github.com/Api-Wrappers/anilist-wrapper)
+
+## When should you use this directly?
+
+Use `@api-wrappers/api-core` directly when you are building a typed API wrapper,
+SDK, integration package, or internal service client and want shared HTTP
+behavior without locking into a large framework. It is also useful when you need
+a testable transport abstraction around `fetch`.
+
+## When should you not use this?
+
+Do not use this package when you only need one or two direct `fetch` calls, when
+a provider's official SDK already covers your use case well, or when your
+application needs generated clients from an OpenAPI or GraphQL schema as the
+primary source of truth. `api-core` is a runtime foundation, not a schema
+generator, endpoint catalog, or full application data-fetching framework.
+
+## API Coverage
+
+`api-core` covers the shared HTTP runtime concerns wrapper packages usually
+need:
 
 - Typed REST helpers: `get`, `post`, `put`, `patch`, `delete`, `head`,
   `options`, and `request`.
@@ -37,7 +81,7 @@ their internal HTTP layer consistent and testable.
 - Query string support for primitives and repeated array values.
 - ESM and CommonJS builds with TypeScript declarations.
 
-## Requirements
+## Runtime support
 
 - TypeScript 5+
 - A runtime with `fetch`, `Request`, `Response`, and `AbortController`
@@ -53,6 +97,178 @@ bun add @api-wrappers/api-core
 
 ```bash
 npm install @api-wrappers/api-core
+```
+
+## Examples
+
+### Basic REST request
+
+```ts
+import { createClient } from "@api-wrappers/api-core";
+
+interface Movie {
+	id: number;
+	title: string;
+}
+
+interface MovieSearchResponse {
+	page: number;
+	results: Array<Movie>;
+}
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	defaultHeaders: { accept: "application/json" },
+});
+
+const movies = await client.get<MovieSearchResponse>("/search/movie", {
+	query: {
+		query: "Arrival",
+		page: 1,
+	},
+});
+
+console.log(movies.results[0]?.title);
+```
+
+### Auth plugin
+
+```ts
+import { createAuthPlugin, createClient } from "@api-wrappers/api-core";
+
+const tokenStore: { accessToken?: string } = {
+	accessToken: "provider-access-token",
+};
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	plugins: [
+		createAuthPlugin({
+			getToken: () => tokenStore.accessToken,
+			headerName: "authorization",
+			scheme: "Bearer",
+		}),
+	],
+});
+
+await client.get("/account");
+```
+
+The token is loaded for each request, so wrappers can refresh credentials
+without rebuilding the client.
+
+### Retry plugin
+
+```ts
+import { createClient, createRetryPlugin } from "@api-wrappers/api-core";
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	plugins: [
+		createRetryPlugin({
+			maxAttempts: 3,
+			delayMs: 300,
+			jitter: true,
+			retriableStatusCodes: [429, 500, 502, 503, 504],
+		}),
+	],
+});
+
+await client.get("/temporarily-flaky-resource");
+```
+
+### Timeout plugin
+
+```ts
+import { createClient, createTimeoutPlugin } from "@api-wrappers/api-core";
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	plugins: [createTimeoutPlugin({ timeoutMs: 10_000 })],
+});
+
+await client.get("/slow-report");
+```
+
+Requests that exceed the timeout throw `TimeoutError`.
+
+### GraphQL request
+
+```ts
+import { createClient, gql } from "@api-wrappers/api-core";
+
+interface ViewerQuery {
+	Viewer: {
+		id: number;
+		name: string;
+	};
+}
+
+const client = createClient({
+	baseUrl: "https://graphql.example.com",
+});
+
+const data = await client.graphql<ViewerQuery>("/", {
+	query: gql`
+		query Viewer {
+			Viewer {
+				id
+				name
+			}
+		}
+	`,
+});
+
+console.log(data.Viewer.name);
+```
+
+### Custom fetch / transport
+
+Use `fetch` when you only need to swap the fetch implementation:
+
+```ts
+import { createClient } from "@api-wrappers/api-core";
+import type { FetchLike } from "@api-wrappers/api-core";
+
+const tracedFetch: FetchLike = async (input, init) => {
+	console.log("api-core request", input);
+	return fetch(input, init);
+};
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	fetch: tracedFetch,
+});
+```
+
+Use `transport` when tests or nonstandard runtimes need full execution control:
+
+```ts
+import { createClient } from "@api-wrappers/api-core";
+import type { Transport } from "@api-wrappers/api-core";
+
+interface EchoBody {
+	url: string;
+	method: string;
+}
+
+const testTransport: Transport = {
+	async execute(ctx) {
+		const body: EchoBody = {
+			url: ctx.url,
+			method: ctx.method,
+		};
+
+		return new Response(JSON.stringify(body), {
+			headers: { "content-type": "application/json" },
+		});
+	},
+};
+
+const client = createClient({
+	baseUrl: "https://api.example.com/v1",
+	transport: testTransport,
+});
 ```
 
 ## Quick Start
@@ -168,7 +384,7 @@ Plain objects and arrays are JSON encoded. Strings and native `BodyInit`
 values are sent as-is, which supports APIs that expect text query languages:
 
 ```ts
-const games = await client.post<Game[]>(
+const games = await client.post<Array<Game>>(
 	"/games",
 	"fields name,rating; limit 10;",
 	{
@@ -465,7 +681,7 @@ The package publishes:
 - ESM: `dist/index.mjs`
 - CommonJS: `dist/index.cjs`
 - Type declarations for both module formats
-- README and docs
+- README, license, changelog, roadmap, contributing guide, and docs
 
 ## More Documentation
 
@@ -473,12 +689,19 @@ The package publishes:
   map.
 - [Getting started](docs/getting-started.md): install, create a client, and make
   the first request.
+- [Examples](docs/examples.md): copy-pasteable REST, plugin, GraphQL,
+  transport, and error-handling examples.
 - [REST requests](docs/guides/rest-requests.md): methods, query params, request
   bodies, abort signals, and response metadata.
 - [Built-in plugins](docs/guides/built-in-plugins.md): auth, retry, timeout,
   rate-limit, cache, and logger usage.
 - [Client API reference](docs/reference/client.md): client methods and response
   shapes.
+- [Roadmap](ROADMAP.md): runtime direction, priorities, and non-goals.
+- [Contributing](CONTRIBUTING.md): local setup, review expectations, and
+  validation commands.
+- [Contributing ideas](docs/contributing-ideas.md): starter issue ideas for new
+  contributors.
 
 ## Development
 
@@ -493,4 +716,13 @@ bun run pack:dry-run
 ```
 
 `dist` is generated by `tsdown`. The published package includes `dist`, `docs`,
-`README.md`, and `package.json`.
+`README.md`, `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `ROADMAP.md`, and
+`package.json`.
+
+## Release process
+
+Maintainers release from `main` with Changesets. Add a changeset with
+`bun run changeset`, merge the generated version PR, and the release workflow
+will run validation, publish to npm with provenance, and create GitHub release
+notes. See [.github/RELEASE.md](.github/RELEASE.md) for npm trusted publishing
+settings and safe dry-run guidance.

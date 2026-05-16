@@ -1,0 +1,70 @@
+name: Feature request
+description: Suggest an improvement for api-core
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement. api-core stays small on purpose, so feature requests should explain which wrapper packages or direct users benefit.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem should this solve?
+      placeholder: Describe the wrapper or runtime need.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What API, docs, plugin, or behavior would you add or change?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What can users do today, and why is it not enough?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Runtime client
+        - Plugin lifecycle
+        - Built-in plugin
+        - Transport or custom fetch
+        - GraphQL
+        - Errors and type guards
+        - Documentation
+        - Build or package output
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: api
+    attributes:
+      label: API sketch
+      description: If this changes public API, show the TypeScript shape or example usage.
+      render: ts
+  - type: textarea
+    id: users
+    attributes:
+      label: Who benefits?
+      description: Which Api-Wrappers packages, wrapper authors, or direct users would use this?
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked for an existing feature request.
+          required: true
+        - label: I explained why this belongs in api-core instead of a provider-specific wrapper.
+          required: true
+        - label: I considered documentation and test coverage for the change.
+          required: true

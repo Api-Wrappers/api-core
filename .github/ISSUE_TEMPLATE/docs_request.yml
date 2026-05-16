@@ -1,0 +1,50 @@
+name: Documentation request
+description: Request clearer or missing api-core documentation
+title: "docs: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for improving the docs. Please describe what was confusing, missing, or hard to apply.
+  - type: textarea
+    id: page
+    attributes:
+      label: Page or section
+      description: Link to the README, guide, API reference, or section that needs work.
+      placeholder: README examples, docs/guides/plugins.md, docs/reference/client.md, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is confusing or missing?
+      description: Explain the documentation gap from a reader's point of view.
+    validations:
+      required: true
+  - type: textarea
+    id: suggested
+    attributes:
+      label: Suggested improvement
+      description: What example, explanation, link, or reference detail would help?
+  - type: dropdown
+    id: audience
+    attributes:
+      label: Reader type
+      options:
+        - Wrapper package maintainer
+        - Direct api-core user
+        - New contributor
+        - Other
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I checked the README and docs directory for existing coverage.
+          required: true
+        - label: This is a documentation request, not a runtime feature request.
+          required: true
