@@ -51,15 +51,32 @@ await client.post<ArrayBuffer>("/games.pb", query, {
 });
 ```
 
+## `requestWithResponse<T>(path, options)`
+
+Use `requestWithResponse` when you need more than just parsed data. Prefer
+`request` for normal API calls, and choose `requestWithResponse` for wrappers,
+instrumentation, caching decisions, or debugging where headers/status/request
+context matter.
+
+```ts
+const result = await client.requestWithResponse<MoviePage>("/movie/popular");
+
+result.data; // Parsed response body
+result.response.status; // Raw status code
+result.response.headers.get("x-ratelimit-remaining"); // Header access
+result.request.url; // Final URL after query merge
+result.meta["cache.served"]; // Plugin-provided metadata
+```
+
 ## `ApiResponse<T>`
 
 Returned by `requestWithResponse`.
 
 ```ts
 interface ApiResponse<T = unknown> {
-	data: T;
-	response: Response;
-	request: RequestContext;
-	meta: Record<string, unknown>;
+	data: T; // Parsed body returned by the parser
+	response: Response; // Native response object for headers/status
+	request: RequestContext; // Request details (URL, method, headers)
+	meta: Record<string, unknown>; // Plugin metadata from the request pipeline
 }
 ```
