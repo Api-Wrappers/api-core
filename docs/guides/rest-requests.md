@@ -52,6 +52,16 @@ await client.get("/movies", {
 | `responseType` | Override response parsing with `json`, `text`, `arrayBuffer`, or `blob`. Defaults to `auto`. |
 | `errorResponseType` | Override non-2xx body parsing. Defaults to `auto`. |
 
+### `responseType` quick reference
+
+| `responseType` | Returns | Common use case |
+| --- | --- | --- |
+| `auto` (default) | Auto-detected value from `content-type` (`json`, `text`, or binary fallback) | Most API calls where response format is standard and predictable. |
+| `json` | Parsed JSON value | REST/GraphQL responses that always return structured JSON. |
+| `text` | UTF-8 string | Plain text endpoints, HTML fragments, or server messages. |
+| `arrayBuffer` | `ArrayBuffer` | File downloads, protobuf payloads, or any binary processing pipeline. |
+| `blob` | `Blob` (when available) | Browser-first file handling, previews, and upload/download flows. |
+
 `headers` and `defaultHeaders` accept any `HeadersInit` shape: plain objects,
 native `Headers`, or `[name, value]` tuples. Header names are normalized
 case-insensitively before the request reaches plugins or transports.
