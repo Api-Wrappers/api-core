@@ -24,15 +24,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v2.0.2
+        uses: oven-sh/setup-bun@v2.2.0
         with:
           bun-version: latest
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6.3.0
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: 24
           package-manager-cache: false
@@ -75,7 +75,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.0
+        uses: actions/checkout@v6.0.2
 
       - name: Review dependency changes
-        uses: actions/dependency-review-action@v4.9.0
+        uses: actions/dependency-review-action@v5.0.0
