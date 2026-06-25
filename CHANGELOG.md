@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.3 - 2026-06-25
+
+- Rate limiter now observes `AbortSignal`: an in-flight delay is cancelled immediately when the signal fires.
+- Logger plugin now supports `logBody` and `redactBody` options to include or selectively redact request/response bodies in log output.
+- Improved package discovery metadata (keywords, description).
+
 ## 1.0.2 - 2026-05-14
 
 - Broadened the TypeScript peer dependency range to support TypeScript 6.
