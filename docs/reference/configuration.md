@@ -41,6 +41,10 @@ interface RequestOptions {
 }
 ```
 
+`signal` is honored while a request is waiting in the built-in rate-limit queue
+as well as during transport execution. If it is already aborted, the request
+rejects before transport starts.
+
 ## `GraphQLRequestOptions<TVariables>`
 
 ```ts

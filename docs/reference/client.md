@@ -68,6 +68,13 @@ result.request.url; // Final URL after query merge
 result.meta["cache.served"]; // Plugin-provided metadata
 ```
 
+## Cancellation
+
+Pass `signal` on any request option to cancel work. Built-in transport and
+timeout handling observe the signal, and queued requests inside
+`createRateLimitPlugin` are removed before acquisition when the signal aborts.
+Already-aborted signals reject before reaching the transport.
+
 ## `ApiResponse<T>`
 
 Returned by `requestWithResponse`.

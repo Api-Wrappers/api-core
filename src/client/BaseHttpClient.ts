@@ -5,10 +5,12 @@ import { RateLimitError } from "../errors/RateLimitError";
 import { GraphQLRequestError } from "../graphql/GraphQLRequestError";
 import type { GraphQLRequestOptions, GraphQLResponse } from "../graphql/types";
 import { getPluginErrorContext, PluginManager } from "../plugin/PluginManager";
+import { readRetryMeta } from "../plugins/meta";
 import {
 	createFetchTransport,
 	fetchTransport,
 } from "../transport/fetchTransport";
+import type { Transport } from "../transport/types";
 import type { HeaderInput, HttpMethod, QueryParams } from "../types/common";
 import { isJsonContentType } from "../utils/isJsonContentType";
 import { mergeHeaders } from "../utils/mergeHeaders";
@@ -74,6 +76,17 @@ export interface ApiResponse<T = unknown> {
 }
 
 const DEFAULT_RETRIABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+
+interface RetryPolicy {
+	maxAttempts: number;
+	baseDelay: number;
+	jitter: boolean;
+	retriableCodes: readonly number[];
+}
+
+class TransportExecutionError {
+	constructor(readonly cause: unknown) {}
+}
 
 /**
  * Core HTTP client. Manages the plugin lifecycle, retry loop, and transport
@@ -173,130 +186,65 @@ export class BaseHttpClient {
 	): Promise<ApiResponse<T>> {
 		await this.init();
 
-		const transport =
-			this.config.transport ??
-			(this.config.fetch
-				? createFetchTransport(this.config.fetch)
-				: fetchTransport);
-		const retryCfg = this.config.retry;
-		// These are `let` so createRetryPlugin can override them per-request via
-		// ctx.meta after beforeRequest runs (see merge block below).
-		let maxAttempts = normalizeRetryMaxAttempts(retryCfg?.maxAttempts);
-		let baseDelay = retryCfg?.delayMs ?? 500;
-		let jitter = retryCfg?.jitter ?? true;
-		let retriableCodes =
-			retryCfg?.retriableStatusCodes ?? DEFAULT_RETRIABLE_STATUS_CODES;
-
+		const transport = this.resolveTransport();
+		let retryPolicy = this.resolveInitialRetryPolicy();
 		let lastError: unknown;
 
-		for (let attempt = 0; attempt < maxAttempts; attempt++) {
-			const baseCtx: RequestContext = {
-				url: resolveUrl(this.config.baseUrl, path),
-				method: options.method ?? "GET",
-				headers: mergeHeaders(
-					{ "content-type": "application/json" },
-					this.config.defaultHeaders,
-					options.headers,
-				),
-				body: options.body,
-				query: options.query,
-				signal: options.signal,
-				meta: {},
-				cacheKey: options.cacheKey,
-				tags: options.tags,
-				retryCount: maxAttempts - 1 - attempt,
+		for (let attempt = 0; attempt < retryPolicy.maxAttempts; attempt++) {
+			const baseCtx = this.buildRequestContext(
+				path,
+				options,
 				attempt,
-				timeoutMs: options.timeoutMs ?? this.config.timeoutMs,
-			};
+				retryPolicy,
+			);
+			const ctx = await this.runBeforeRequest(baseCtx);
+			retryPolicy = this.resolveRetryPolicyFromMeta(ctx, retryPolicy);
 
-			let ctx: RequestContext;
+			const retryCount = retryPolicy.maxAttempts - 1 - attempt;
+			const attemptCtx =
+				ctx.retryCount === retryCount ? ctx : { ...ctx, retryCount };
+
+			let resCtx: ResponseContext;
 			try {
-				ctx = await this.pluginManager.beforeRequest(baseCtx);
+				resCtx = await this.executeAttempt(attemptCtx, transport, options);
 			} catch (err) {
-				await this.pluginManager.onError(
-					err,
-					getPluginErrorContext(err) ?? baseCtx,
-				);
-				throw err;
-			}
-
-			// Merge per-request retry overrides written by createRetryPlugin.
-			// Only keys explicitly set by the plugin are present, so unset keys
-			// leave the config-level defaults untouched.
-			// Because the for-loop condition re-evaluates `attempt < maxAttempts`
-			// on every iteration, updating maxAttempts here takes effect
-			// immediately for all remaining attempts.
-			if (ctx.meta["retry.maxAttempts"] !== undefined) {
-				maxAttempts = normalizeRetryMaxAttempts(
-					ctx.meta["retry.maxAttempts"] as number,
-				);
-			}
-			if (ctx.meta["retry.delayMs"] !== undefined)
-				baseDelay = ctx.meta["retry.delayMs"] as number;
-			if (ctx.meta["retry.jitter"] !== undefined)
-				jitter = ctx.meta["retry.jitter"] as boolean;
-			if (ctx.meta["retry.retriableStatusCodes"] !== undefined)
-				retriableCodes = ctx.meta["retry.retriableStatusCodes"] as number[];
-
-			const retryCount = maxAttempts - 1 - attempt;
-			if (ctx.retryCount !== retryCount) {
-				ctx = { ...ctx, retryCount };
-			}
-
-			let rawResponse: Response;
-			if (ctx.syntheticResponse) {
-				// A plugin (e.g. cache) pre-populated the response — skip the
-				// network entirely.
-				rawResponse = ctx.syntheticResponse;
-			} else {
-				try {
-					rawResponse = await transport.execute(ctx);
-				} catch (err) {
-					await this.pluginManager.onError(err, ctx);
-					lastError = err;
-
-					if (attempt < maxAttempts - 1) {
-						await this.waitForRetry(attempt, baseDelay, jitter);
-						continue;
-					}
+				if (!(err instanceof TransportExecutionError)) {
 					throw err;
 				}
-			}
 
-			const parsedBody = await parseBody(
-				rawResponse,
-				rawResponse.ok
-					? options.responseType
-					: (options.errorResponseType ?? "auto"),
-			);
-
-			let resCtx: ResponseContext = {
-				request: ctx,
-				response: rawResponse,
-				parsedBody,
-				meta: {},
-			};
-
-			try {
-				resCtx = await this.pluginManager.afterResponse(resCtx);
-			} catch (err) {
-				await this.pluginManager.onError(err, ctx);
-				throw err;
+				lastError = err.cause;
+				if (attempt < retryPolicy.maxAttempts - 1) {
+					await this.waitForRetry(
+						attempt,
+						retryPolicy.baseDelay,
+						retryPolicy.jitter,
+					);
+					continue;
+				}
+				throw err.cause;
 			}
 
 			const finalResponse = resCtx.response;
 
 			if (!finalResponse.ok) {
 				const shouldRetry =
-					retriableCodes.includes(finalResponse.status) &&
-					attempt < maxAttempts - 1;
+					retryPolicy.retriableCodes.includes(finalResponse.status) &&
+					attempt < retryPolicy.maxAttempts - 1;
 
 				if (shouldRetry) {
 					if (finalResponse.status === 429) {
 						const wait = readRetryAfterMs(finalResponse);
-						await this.waitForRetry(attempt, wait ?? baseDelay, false);
+						await this.waitForRetry(
+							attempt,
+							wait ?? retryPolicy.baseDelay,
+							false,
+						);
 					} else {
-						await this.waitForRetry(attempt, baseDelay, jitter);
+						await this.waitForRetry(
+							attempt,
+							retryPolicy.baseDelay,
+							retryPolicy.jitter,
+						);
 					}
 					lastError = normalizeHttpError(finalResponse, resCtx.parsedBody);
 					continue;
@@ -316,6 +264,123 @@ export class BaseHttpClient {
 		}
 
 		throw lastError;
+	}
+
+	private resolveTransport(): Transport {
+		return (
+			this.config.transport ??
+			(this.config.fetch
+				? createFetchTransport(this.config.fetch)
+				: fetchTransport)
+		);
+	}
+
+	private resolveInitialRetryPolicy(): RetryPolicy {
+		const retryCfg = this.config.retry;
+		return {
+			maxAttempts: normalizeRetryMaxAttempts(retryCfg?.maxAttempts),
+			baseDelay: retryCfg?.delayMs ?? 500,
+			jitter: retryCfg?.jitter ?? true,
+			retriableCodes:
+				retryCfg?.retriableStatusCodes ?? DEFAULT_RETRIABLE_STATUS_CODES,
+		};
+	}
+
+	private buildRequestContext(
+		path: string,
+		options: RequestOptions,
+		attempt: number,
+		retryPolicy: RetryPolicy,
+	): RequestContext {
+		return {
+			url: resolveUrl(this.config.baseUrl, path),
+			method: options.method ?? "GET",
+			headers: mergeHeaders(
+				{ "content-type": "application/json" },
+				this.config.defaultHeaders,
+				options.headers,
+			),
+			body: options.body,
+			query: options.query,
+			signal: options.signal,
+			meta: {},
+			cacheKey: options.cacheKey,
+			tags: options.tags,
+			retryCount: retryPolicy.maxAttempts - 1 - attempt,
+			attempt,
+			timeoutMs: options.timeoutMs ?? this.config.timeoutMs,
+		};
+	}
+
+	private async runBeforeRequest(
+		baseCtx: RequestContext,
+	): Promise<RequestContext> {
+		try {
+			return await this.pluginManager.beforeRequest(baseCtx);
+		} catch (err) {
+			await this.pluginManager.onError(
+				err,
+				getPluginErrorContext(err) ?? baseCtx,
+			);
+			throw err;
+		}
+	}
+
+	private resolveRetryPolicyFromMeta(
+		ctx: RequestContext,
+		current: RetryPolicy,
+	): RetryPolicy {
+		const retryMeta = readRetryMeta(ctx.meta);
+		return {
+			maxAttempts:
+				retryMeta.maxAttempts === undefined
+					? current.maxAttempts
+					: normalizeRetryMaxAttempts(retryMeta.maxAttempts),
+			baseDelay: retryMeta.delayMs ?? current.baseDelay,
+			jitter: retryMeta.jitter ?? current.jitter,
+			retriableCodes: retryMeta.retriableStatusCodes ?? current.retriableCodes,
+		};
+	}
+
+	private async executeAttempt(
+		ctx: RequestContext,
+		transport: Transport,
+		options: RequestOptions,
+	): Promise<ResponseContext> {
+		let rawResponse: Response;
+		if (ctx.syntheticResponse) {
+			// A plugin (e.g. cache) pre-populated the response — skip the
+			// network entirely.
+			rawResponse = ctx.syntheticResponse;
+		} else {
+			try {
+				rawResponse = await transport.execute(ctx);
+			} catch (err) {
+				await this.pluginManager.onError(err, ctx);
+				throw new TransportExecutionError(err);
+			}
+		}
+
+		const parsedBody = await parseBody(
+			rawResponse,
+			rawResponse.ok
+				? options.responseType
+				: (options.errorResponseType ?? "auto"),
+		);
+
+		const resCtx: ResponseContext = {
+			request: ctx,
+			response: rawResponse,
+			parsedBody,
+			meta: {},
+		};
+
+		try {
+			return await this.pluginManager.afterResponse(resCtx);
+		} catch (err) {
+			await this.pluginManager.onError(err, ctx);
+			throw err;
+		}
 	}
 
 	// ─── Convenience methods ────────────────────────────────────────────────────

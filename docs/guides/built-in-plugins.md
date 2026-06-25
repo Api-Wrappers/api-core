@@ -105,14 +105,26 @@ await cache.invalidateByTag("user");
 
 ## Logger
 
-Logs request starts, responses, and errors.
+Logs request starts, responses, and errors. Request bodies are omitted by
+default so tokens, secrets, search payloads, and user data do not reach logs
+accidentally.
 
 ```ts
 createLoggerPlugin({
 	logRequest: true,
 	logResponse: true,
 	logError: true,
+	logBody: false,
 	logger: console,
+});
+```
+
+Opt in to body logging only when the output is safe, and redact before logging:
+
+```ts
+createLoggerPlugin({
+	logBody: true,
+	redactBody: () => ({ token: "[redacted]" }),
 });
 ```
 

@@ -76,6 +76,64 @@ describe("createRateLimitPlugin", () => {
 		}
 	});
 
+	it("rejects queued requests promptly when their signal aborts", async () => {
+		let transportCalls = 0;
+		let releaseFirst: (() => void) | undefined;
+		let markFirstStarted: (() => void) | undefined;
+		const firstStarted = new Promise<void>((resolve) => {
+			markFirstStarted = resolve;
+		});
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [createRateLimitPlugin({ maxConcurrent: 1 })],
+			transport: {
+				execute: async () => {
+					transportCalls++;
+					markFirstStarted?.();
+					await new Promise<void>((release) => {
+						releaseFirst = release;
+					});
+					return jsonResponse({ ok: true });
+				},
+			},
+		});
+
+		const first = client.get("/a");
+		await firstStarted;
+
+		const controller = new AbortController();
+		const second = client.get("/b", { signal: controller.signal });
+
+		controller.abort(new Error("cancelled"));
+
+		await expect(second).rejects.toThrow("cancelled");
+		expect(transportCalls).toBe(1);
+		releaseFirst?.();
+		await expect(first).resolves.toEqual({ ok: true });
+	});
+
+	it("rejects already-aborted signals before acquiring a slot", async () => {
+		let transportCalls = 0;
+		const controller = new AbortController();
+		controller.abort(new Error("already done"));
+
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [createRateLimitPlugin({ maxConcurrent: 1 })],
+			transport: {
+				execute: async () => {
+					transportCalls++;
+					return jsonResponse({});
+				},
+			},
+		});
+
+		await expect(
+			client.get("/a", { signal: controller.signal }),
+		).rejects.toThrow("already done");
+		expect(transportCalls).toBe(0);
+	});
+
 	it("releases queued requests after a later beforeRequest plugin throws", async () => {
 		let shouldThrow = true;
 		const client = new BaseHttpClient({
@@ -89,6 +147,39 @@ describe("createRateLimitPlugin", () => {
 						if (!shouldThrow) return ctx;
 						shouldThrow = false;
 						throw new Error("before boom");
+					},
+				},
+			],
+			transport: {
+				execute: async () => jsonResponse({ ok: true }),
+			},
+		});
+
+		const [first, second] = await Promise.allSettled([
+			client.get("/a"),
+			client.get<{ ok: boolean }>("/b"),
+		]);
+
+		expect(first.status).toBe("rejected");
+		expect(second.status).toBe("fulfilled");
+		if (second.status === "fulfilled") {
+			expect(second.value.ok).toBe(true);
+		}
+	});
+
+	it("releases queued requests after a later afterResponse plugin throws", async () => {
+		let shouldThrow = true;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				createRateLimitPlugin({ maxConcurrent: 1 }),
+				{
+					name: "bad-after",
+					priority: 10,
+					afterResponse(ctx) {
+						if (!shouldThrow) return ctx;
+						shouldThrow = false;
+						throw new Error("after boom");
 					},
 				},
 			],

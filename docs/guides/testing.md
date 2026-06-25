@@ -86,3 +86,12 @@ After `bun run build`, verify both module formats:
 node --input-type=module -e "const m = await import('./dist/index.mjs'); if (!m.createClient) throw new Error('missing ESM export')"
 node -e "const m = require('./dist/index.cjs'); if (!m.createClient) throw new Error('missing CJS export')"
 ```
+
+For the same check through the package tarball and export map, run:
+
+```bash
+bun run smoke:package
+```
+
+That command packs the project into a temporary consumer, installs the tarball,
+then verifies package-root ESM and CommonJS usage.

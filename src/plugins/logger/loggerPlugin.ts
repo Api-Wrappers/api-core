@@ -27,6 +27,8 @@ export function createLoggerPlugin(
 		logRequest = true,
 		logResponse = true,
 		logError = true,
+		logBody = false,
+		redactBody = (body: unknown) => body,
 		logger = console,
 	} = options;
 
@@ -38,7 +40,7 @@ export function createLoggerPlugin(
 			if (logRequest) {
 				logger.info(`[api-core] --> ${ctx.method} ${ctx.url}`, {
 					attempt: ctx.attempt,
-					body: ctx.body,
+					...(logBody && { body: redactBody(ctx.body) }),
 				});
 			}
 			return ctx;

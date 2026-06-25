@@ -1,10 +1,10 @@
 import type { RequestContext } from "../../context/RequestContext";
 import { buildUrl } from "../../utils/buildUrl";
+import { BUILT_IN_META_KEYS, readCacheHitMeta, readStringMeta } from "../meta";
 import { MemoryStore } from "./memoryStore";
 import type { CachePlugin, CachePluginOptions } from "./types";
 
 const DEFAULT_CACHEABLE_METHODS = ["GET"] as const;
-const CACHE_HIT_META_KEY = "cache.hit";
 
 export function createCachePlugin(
 	options: CachePluginOptions = {},
@@ -41,7 +41,7 @@ export function createCachePlugin(
 					...ctx,
 					meta: {
 						...ctx.meta,
-						[CACHE_HIT_META_KEY]: { key, data: cached },
+						[BUILT_IN_META_KEYS.cacheHit]: { key, data: cached },
 					},
 					syntheticResponse,
 				};
@@ -49,27 +49,25 @@ export function createCachePlugin(
 
 			return {
 				...ctx,
-				meta: { ...ctx.meta, "cache.key": key },
+				meta: { ...ctx.meta, [BUILT_IN_META_KEYS.cacheKey]: key },
 			};
 		},
 
 		async afterResponse(ctx) {
-			const hit = ctx.request.meta[CACHE_HIT_META_KEY] as
-				| { key: string; data: unknown }
-				| undefined;
+			const hit = readCacheHitMeta(ctx.request.meta);
 
 			if (hit) {
 				return {
 					...ctx,
 					parsedBody: hit.data,
-					meta: { ...ctx.meta, "cache.served": true },
+					meta: { ...ctx.meta, [BUILT_IN_META_KEYS.cacheServed]: true },
 				};
 			}
 
-			const key = ctx.request.meta["cache.key"] as string | undefined;
+			const key = readStringMeta(ctx.request.meta, BUILT_IN_META_KEYS.cacheKey);
 			if (key && methods.includes(ctx.request.method) && ctx.response.ok) {
 				await store.set(key, ctx.parsedBody, ttlMs);
-				ctx.meta["cache.stored"] = true;
+				ctx.meta[BUILT_IN_META_KEYS.cacheStored] = true;
 
 				// Record tag → key associations for invalidateByTag.
 				for (const tag of ctx.request.tags ?? []) {

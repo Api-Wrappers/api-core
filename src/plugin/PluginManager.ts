@@ -1,6 +1,7 @@
 import type { LoggerInterface } from "../client/types";
 import type { RequestContext } from "../context/RequestContext";
 import type { ResponseContext } from "../context/ResponseContext";
+import { getPassThroughCause } from "./passThroughError";
 import type { ApiPlugin } from "./types";
 
 export class PluginManager {
@@ -43,6 +44,8 @@ export class PluginManager {
 				const result = await plugin.beforeRequest?.(current);
 				if (result != null) current = result;
 			} catch (err) {
+				const passThroughCause = getPassThroughCause(err);
+				if (passThroughCause !== undefined) throw passThroughCause;
 				throw wrapPluginError(plugin.name, "beforeRequest", err, current);
 			}
 		}

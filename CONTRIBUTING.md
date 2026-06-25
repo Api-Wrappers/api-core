@@ -26,6 +26,7 @@ bun run verify
 - `bun test`
 - `bun run build`
 - `bun run pack:dry-run`
+- `bun run smoke:package`
 
 ## Development guidelines
 

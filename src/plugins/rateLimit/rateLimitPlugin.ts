@@ -1,11 +1,14 @@
 import type { RequestContext } from "../../context/RequestContext";
+import { createPassThroughError } from "../../plugin/passThroughError";
 import type { ApiPlugin } from "../../plugin/types";
+import { BUILT_IN_META_KEYS, readRateLimitRelease } from "../meta";
 import type { RateLimitPluginOptions } from "./types";
-
-const RELEASE_META_KEY = "rateLimit.release";
 
 interface QueueItem {
 	resolve: (release: () => void) => void;
+	reject: (reason: unknown) => void;
+	signal?: AbortSignal;
+	onAbort?: () => void;
 }
 
 /**
@@ -64,6 +67,12 @@ export function createRateLimitPlugin(
 
 			const item = queue.shift();
 			if (!item) return;
+			cleanupQueueItem(item);
+
+			if (item.signal?.aborted) {
+				item.reject(getAbortReason(item.signal));
+				continue;
+			}
 
 			active++;
 			lastStartAt = now;
@@ -79,17 +88,50 @@ export function createRateLimitPlugin(
 		}
 	};
 
-	const acquire = () =>
-		new Promise<() => void>((resolve) => {
-			queue.push({ resolve });
+	const acquire = (signal?: AbortSignal) =>
+		new Promise<() => void>((resolve, reject) => {
+			if (signal?.aborted) {
+				reject(createPassThroughError(getAbortReason(signal)));
+				return;
+			}
+
+			const item: QueueItem = { resolve, reject, signal };
+			item.onAbort = () => {
+				const index = queue.indexOf(item);
+				if (index !== -1) {
+					queue.splice(index, 1);
+				}
+				cleanupQueueItem(item);
+				if (queue.length === 0 && timer) {
+					clearTimeout(timer);
+					timer = undefined;
+				}
+				reject(
+					createPassThroughError(
+						item.signal
+							? getAbortReason(item.signal)
+							: new Error("The operation was aborted."),
+					),
+				);
+			};
+
+			signal?.addEventListener("abort", item.onAbort, { once: true });
+			queue.push(item);
 			processQueue();
 		});
 
 	const release = (ctx: RequestContext) => {
-		const releaseFn = ctx.meta[RELEASE_META_KEY] as (() => void) | undefined;
+		const releaseFn = readRateLimitRelease(ctx.meta);
 		if (!releaseFn) return;
-		delete ctx.meta[RELEASE_META_KEY];
+		delete ctx.meta[BUILT_IN_META_KEYS.rateLimitRelease];
 		releaseFn();
+	};
+
+	const cleanupQueueItem = (item: QueueItem) => {
+		if (item.signal && item.onAbort) {
+			item.signal.removeEventListener("abort", item.onAbort);
+			item.onAbort = undefined;
+		}
 	};
 
 	const pruneStarts = (now: number) => {
@@ -115,10 +157,10 @@ export function createRateLimitPlugin(
 		priority: 1,
 
 		async beforeRequest(ctx) {
-			const releaseFn = await acquire();
+			const releaseFn = await acquire(ctx.signal);
 			return {
 				...ctx,
-				meta: { ...ctx.meta, [RELEASE_META_KEY]: releaseFn },
+				meta: { ...ctx.meta, [BUILT_IN_META_KEYS.rateLimitRelease]: releaseFn },
 			};
 		},
 
@@ -131,4 +173,12 @@ export function createRateLimitPlugin(
 			release(ctx);
 		},
 	};
+}
+
+function getAbortReason(signal: AbortSignal): unknown {
+	if (signal.reason !== undefined) return signal.reason;
+	if (typeof DOMException !== "undefined") {
+		return new DOMException("The operation was aborted.", "AbortError");
+	}
+	return new Error("The operation was aborted.");
 }
