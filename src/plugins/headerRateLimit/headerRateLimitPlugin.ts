@@ -1,5 +1,5 @@
-import { createPassThroughError } from "../../plugin/passThroughError";
 import type { ResponseContext } from "../../context/ResponseContext";
+import { createPassThroughError } from "../../plugin/passThroughError";
 import type {
 	HeaderRateLimitPlugin,
 	HeaderRateLimitPluginOptions,
@@ -146,16 +146,19 @@ function waitWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
 			return;
 		}
 
+		let onAbort: (() => void) | undefined;
+		const cleanup = () => {
+			if (onAbort) signal?.removeEventListener("abort", onAbort);
+		};
 		const timer = setTimeout(() => {
 			cleanup();
 			resolve();
 		}, ms);
-		const onAbort = () => {
+		onAbort = () => {
 			clearTimeout(timer);
 			cleanup();
 			reject(createPassThroughError(getAbortReason(signal)));
 		};
-		const cleanup = () => signal?.removeEventListener("abort", onAbort);
 		signal?.addEventListener("abort", onAbort, { once: true });
 	});
 }
