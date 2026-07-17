@@ -81,7 +81,13 @@ export type {
 	CachePluginOptions,
 	CacheStore,
 } from "./plugins/cache/types";
-
+export { createHeaderRateLimitPlugin } from "./plugins/headerRateLimit/headerRateLimitPlugin";
+export type {
+	HeaderRateLimitPlugin,
+	HeaderRateLimitPluginOptions,
+	HeaderRateLimitState,
+	RateLimitResetFormat,
+} from "./plugins/headerRateLimit/types";
 export { createLoggerPlugin } from "./plugins/logger/loggerPlugin";
 export type { LoggerPluginOptions } from "./plugins/logger/types";
 export { createRateLimitPlugin } from "./plugins/rateLimit/rateLimitPlugin";
