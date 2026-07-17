@@ -54,7 +54,9 @@ describe("createHeaderRateLimitPlugin", () => {
 		const waits: number[] = [];
 		const plugin = createHeaderRateLimitPlugin({
 			now: () => 10_000,
-			wait: async (ms) => waits.push(ms),
+			wait: async (ms) => {
+				waits.push(ms);
+			},
 		});
 
 		await plugin.afterResponse?.(response({ "retry-after": "5" }));
