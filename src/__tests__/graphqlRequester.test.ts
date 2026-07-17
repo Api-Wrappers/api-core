@@ -14,10 +14,9 @@ describe("createGraphQLRequester", () => {
 			transport: {
 				async execute(ctx) {
 					captured = ctx;
-					return new Response(
-						JSON.stringify({ data: { Media: { id: 1 } } }),
-						{ headers: { "content-type": "application/json" } },
-					);
+					return new Response(JSON.stringify({ data: { Media: { id: 1 } } }), {
+						headers: { "content-type": "application/json" },
+					});
 				},
 			},
 		});

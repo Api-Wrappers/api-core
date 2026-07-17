@@ -17,10 +17,9 @@ export interface GraphQLRequesterOptions<
 
 /** Minimal requester contract compatible with generated GraphQL SDK clients. */
 export interface GraphQLRequester {
-	request<
-		TData = unknown,
-		TVariables extends object = Record<string, never>,
-	>(options: GraphQLRequesterOptions<TVariables>): Promise<TData>;
+	request<TData = unknown, TVariables extends object = Record<string, never>>(
+		options: GraphQLRequesterOptions<TVariables>,
+	): Promise<TData>;
 }
 
 export interface CreateGraphQLRequesterOptions {
