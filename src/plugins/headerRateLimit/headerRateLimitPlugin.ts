@@ -15,11 +15,15 @@ import type {
 export function createHeaderRateLimitPlugin(
 	options: HeaderRateLimitPluginOptions = {},
 ): HeaderRateLimitPlugin {
-	const limitHeader = normalizeHeader(options.limitHeader ?? "x-ratelimit-limit");
+	const limitHeader = normalizeHeader(
+		options.limitHeader ?? "x-ratelimit-limit",
+	);
 	const remainingHeader = normalizeHeader(
 		options.remainingHeader ?? "x-ratelimit-remaining",
 	);
-	const resetHeader = normalizeHeader(options.resetHeader ?? "x-ratelimit-reset");
+	const resetHeader = normalizeHeader(
+		options.resetHeader ?? "x-ratelimit-reset",
+	);
 	const retryAfterHeader = normalizeHeader(
 		options.retryAfterHeader ?? "retry-after",
 	);
@@ -121,7 +125,10 @@ function parseResetAt(
 	return Math.max(0, parsed * 1_000);
 }
 
-function parseRetryAfter(value: string | null, now: number): number | undefined {
+function parseRetryAfter(
+	value: string | null,
+	now: number,
+): number | undefined {
 	if (!value) return undefined;
 	const seconds = Number(value);
 	if (Number.isFinite(seconds)) return now + Math.max(0, seconds * 1_000);
