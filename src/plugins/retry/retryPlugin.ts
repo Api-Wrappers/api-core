@@ -14,6 +14,8 @@ export function createRetryPlugin(options: RetryPluginOptions = {}): ApiPlugin {
 		priority: 5,
 
 		beforeRequest(ctx) {
+			if (options.when && !options.when(ctx)) return ctx;
+
 			const meta = { ...ctx.meta };
 			let retryCount = ctx.retryCount;
 
