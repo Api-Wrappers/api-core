@@ -41,7 +41,10 @@ export function createGraphQLRequester(
 	const path = options.path ?? "";
 
 	return {
-		request({
+		request<
+			TData = unknown,
+			TVariables extends object = Record<string, never>,
+		>({
 			document,
 			variables,
 			requestHeaders,
@@ -50,8 +53,8 @@ export function createGraphQLRequester(
 			timeoutMs,
 			cacheKey,
 			tags,
-		}) {
-			return client.graphql(path, {
+		}: GraphQLRequesterOptions<TVariables>): Promise<TData> {
+			return client.graphql<TData, TVariables>(path, {
 				query: options.transformDocument?.(document) ?? document,
 				variables,
 				headers: requestHeaders,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import type { GraphQLRequestOptions } from "../graphql/types";
 import { createGraphQLRequester } from "../graphql/createGraphQLRequester";
+import type { GraphQLRequestOptions } from "../graphql/types";
 
 const DOCUMENT = "query Media($id: Int) { Media(id: $id) { id } }";
 
@@ -16,7 +16,7 @@ describe("createGraphQLRequester", () => {
 			): Promise<TData> {
 				capturedPath = path;
 				capturedOptions = options as GraphQLRequestOptions<{ id: number }>;
-				return { Media: { id: 1 } } as TData;
+				return { Media: { id: 1 } } as unknown as TData;
 			},
 		};
 		const requester = createGraphQLRequester(client, {

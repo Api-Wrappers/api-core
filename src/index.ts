@@ -95,9 +95,7 @@ export type { TimeoutPluginOptions } from "./plugins/timeout/types";
 // client.graphql() lives on BaseHttpClient — re-exported above via BaseHttpClient.
 // These exports cover the standalone helpers, types, and error class.
 
-export {
-	createGraphQLRequester,
-} from "./graphql/createGraphQLRequester";
+export { createGraphQLRequester } from "./graphql/createGraphQLRequester";
 export type {
 	CreateGraphQLRequesterOptions,
 	GraphQLRequester,
