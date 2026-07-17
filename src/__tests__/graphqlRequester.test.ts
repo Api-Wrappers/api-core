@@ -1,24 +1,26 @@
 import { describe, expect, it } from "bun:test";
+import { BaseHttpClient } from "../client/BaseHttpClient";
+import type { RequestContext } from "../context/RequestContext";
 import { createGraphQLRequester } from "../graphql/createGraphQLRequester";
-import type { GraphQLRequestOptions } from "../graphql/types";
 
 const DOCUMENT = "query Media($id: Int) { Media(id: $id) { id } }";
 
 describe("createGraphQLRequester", () => {
 	it("maps generated SDK request fields to api-core GraphQL options", async () => {
-		let capturedPath: string | undefined;
-		let capturedOptions: GraphQLRequestOptions<{ id: number }> | undefined;
+		let captured: RequestContext | undefined;
 		const signal = new AbortController().signal;
-		const client = {
-			async graphql<TData, TVariables extends object>(
-				path: string,
-				options: GraphQLRequestOptions<TVariables>,
-			): Promise<TData> {
-				capturedPath = path;
-				capturedOptions = options as GraphQLRequestOptions<{ id: number }>;
-				return { Media: { id: 1 } } as unknown as TData;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: {
+				async execute(ctx) {
+					captured = ctx;
+					return new Response(
+						JSON.stringify({ data: { Media: { id: 1 } } }),
+						{ headers: { "content-type": "application/json" } },
+					);
+				},
 			},
-		};
+		});
 		const requester = createGraphQLRequester(client, {
 			path: "/graphql",
 			transformDocument: (document) => document.trim(),
@@ -39,16 +41,17 @@ describe("createGraphQLRequester", () => {
 		});
 
 		expect(result).toEqual({ Media: { id: 1 } });
-		expect(capturedPath).toBe("/graphql");
-		expect(capturedOptions).toEqual({
+		expect(captured?.url).toBe("https://api.test/graphql");
+		expect(captured?.method).toBe("POST");
+		expect(captured?.body).toEqual({
 			query: DOCUMENT,
 			variables: { id: 1 },
-			headers: { "x-client": "generated" },
-			signal,
 			operationName: "Media",
-			timeoutMs: 5_000,
-			cacheKey: "media:1",
-			tags: ["media"],
 		});
+		expect(captured?.headers["x-client"]).toBe("generated");
+		expect(captured?.signal).toBe(signal);
+		expect(captured?.timeoutMs).toBe(5_000);
+		expect(captured?.cacheKey).toBe("media:1");
+		expect(captured?.tags).toEqual(["media"]);
 	});
 });
