@@ -1,8 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import {
-	dedupeGraphQLFragmentDefinitions,
-	gql,
-} from "../graphql/gql";
+import { dedupeGraphQLFragmentDefinitions, gql } from "../graphql/gql";
 
 const USER_FRAGMENT = gql`
 	fragment UserFields on User {
