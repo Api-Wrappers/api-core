@@ -3,8 +3,15 @@ import type { HeaderInput } from "../types/common";
 /**
  * The shape of a single error object inside a GraphQL `errors` array,
  * as specified by the GraphQL over HTTP specification.
+ *
+ * @typeParam TAdditionalFields - Provider-specific top-level fields attached to
+ * an error object, such as AniList's numeric `status` field.
+ * @typeParam TExtensions - Shape of the standard GraphQL `extensions` field.
  */
-export interface GraphQLErrorDetail {
+export type GraphQLErrorDetail<
+	TAdditionalFields extends object = Record<never, never>,
+	TExtensions = Record<string, unknown>,
+> = {
 	/** Human-readable error message. */
 	message: string;
 	/**
@@ -15,17 +22,20 @@ export interface GraphQLErrorDetail {
 	/** Source locations in the document that triggered the error. */
 	locations?: { line: number; column: number }[];
 	/** Arbitrary extension data attached by the server. */
-	extensions?: Record<string, unknown>;
-}
+	extensions?: TExtensions;
+} & TAdditionalFields;
 
 /**
  * Raw response envelope returned by any spec-compliant GraphQL server.
  * `data` is absent on a request-level failure; `errors` is absent on
  * a fully successful response.
  */
-export interface GraphQLResponse<TData = unknown> {
+export interface GraphQLResponse<
+	TData = unknown,
+	TError extends GraphQLErrorDetail = GraphQLErrorDetail,
+> {
 	data?: TData;
-	errors?: GraphQLErrorDetail[];
+	errors?: TError[];
 	extensions?: Record<string, unknown>;
 }
 
@@ -33,8 +43,8 @@ export interface GraphQLResponse<TData = unknown> {
  * Options for {@link BaseHttpClient.graphql}.
  *
  * @typeParam TVariables - Shape of the variables object. Defaults to
- *   `Record<string, unknown>`. Provide a specific type for compile-time
- *   variable checking.
+ * `Record<string, unknown>`. Provide a specific type for compile-time
+ * variable checking.
  */
 export interface GraphQLRequestOptions<
 	TVariables extends object = Record<string, unknown>,
@@ -56,9 +66,7 @@ export interface GraphQLRequestOptions<
 	 * this request only. `content-type: application/json` is always set.
 	 */
 	headers?: HeaderInput;
-	/**
-	 * Optional caller-provided abort signal. Composes with `timeoutMs`.
-	 */
+	/** Optional caller-provided abort signal. Composes with `timeoutMs`. */
 	signal?: AbortSignal;
 	/**
 	 * Per-request timeout override in milliseconds. Throws
