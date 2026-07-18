@@ -1,6 +1,6 @@
 {
 	"name": "@api-wrappers/api-core",
-	"version": "1.0.3",
+	"version": "1.1.0",
 	"description": "Shared TypeScript HTTP runtime for Api-Wrappers packages with typed requests, plugins, retries, timeouts, GraphQL, and custom transports.",
 	"repository": {
 		"type": "git",
