@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.0
+
+### Minor Changes
+
+- 787f222: Add conditional retry-plugin predicates for per-request safe and unsafe operation policies.
+- 8e5afc2: Add a GraphQL response helper that preserves raw response headers, request context, plugin metadata, and GraphQL extensions.
+- 0759252: Add a first-class GraphQL requester bridge for generated SDKs.
+- 1387988: Add a stable `@api-wrappers/api-core/graphql` package subpath for GraphQL-focused imports.
+- 7750c07: Allow GraphQL errors and response envelopes to carry strongly typed provider-specific fields.
+- e6bbd8d: Add an adaptive rate-limit plugin driven by standard and provider-specific response headers.
+
+### Patch Changes
+
+- 6228ac9: Reject conflicting GraphQL fragment definitions instead of silently keeping the first definition.
+
 ## 1.0.3 - 2026-06-25
 
 - Rate limiter now observes `AbortSignal`: an in-flight delay is cancelled immediately when the signal fires.
