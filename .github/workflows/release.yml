@@ -73,12 +73,59 @@ jobs:
       - name: Verify npm package contents
         run: npm pack --dry-run --json
 
-      - name: Create version PR or publish to npm
-        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+      - name: Detect pending changesets
+        id: changesets
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(.changeset/*.md)
+          if (( ${#files[@]} > 0 )); then
+            echo "pending=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "pending=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create or update version PR
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'true'
         uses: changesets/action@v1
         with:
           version: bun run version-packages
-          publish: npm publish --access public --provenance
-          createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read package metadata
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'false'
+        id: package
+        shell: bash
+        run: |
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether package version is already published
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'false'
+        id: registry
+        shell: bash
+        run: |
+          if npm view "${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish package to npm
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'false' && steps.registry.outputs.published == 'false'
+        run: npm publish --access public --provenance
+
+      - name: Create GitHub release
+        if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.package.outputs.version }}
+        shell: bash
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "GitHub release $tag already exists"
+          else
+            gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --generate-notes
+          fi
