@@ -13,39 +13,20 @@ import type { GraphQLErrorDetail } from "./types";
  * When the server returns both `data` and `errors` (partial result), the
  * partial data is available on `partialData` but the error is still thrown —
  * callers must explicitly opt in to consuming partial results.
- *
- * @example
- * ```ts
- * import { GraphQLRequestError } from "@api-wrappers/api-core";
- *
- * try {
- *   const data = await client.graphql<MyQuery>("/graphql", { query: QUERY });
- * } catch (err) {
- *   if (err instanceof GraphQLRequestError) {
- *     for (const e of err.graphqlErrors) {
- *       console.error(e.message, e.path);
- *     }
- *   }
- * }
- * ```
  */
-export class GraphQLRequestError extends ApiError {
+export class GraphQLRequestError<
+	TError extends GraphQLErrorDetail = GraphQLErrorDetail,
+> extends ApiError {
 	/** The errors array from the GraphQL response envelope. */
-	readonly graphqlErrors: readonly GraphQLErrorDetail[];
+	readonly graphqlErrors: readonly TError[];
 	/**
 	 * Partial `data` returned alongside `errors`, if any. `undefined` when
 	 * the server returned no `data` field.
 	 */
 	readonly partialData: unknown;
 
-	constructor(
-		errors: GraphQLErrorDetail[],
-		partialData?: unknown,
-		cause?: unknown,
-	) {
-		const message = errors.map((e) => e.message).join("; ");
-		// Status 200: the HTTP request succeeded; the failure is at the
-		// GraphQL application layer, not the transport layer.
+	constructor(errors: TError[], partialData?: unknown, cause?: unknown) {
+		const message = errors.map((error) => error.message).join("; ");
 		super(`GraphQL errors: ${message}`, 200, { errors }, cause);
 		this.name = "GraphQLRequestError";
 		this.graphqlErrors = errors;
