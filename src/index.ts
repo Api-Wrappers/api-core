@@ -109,6 +109,8 @@ export type {
 export { createGraphQLRequester } from "./graphql/createGraphQLRequester";
 export { GraphQLRequestError } from "./graphql/GraphQLRequestError";
 export { dedupeGraphQLFragmentDefinitions, gql } from "./graphql/gql";
+export type { GraphQLApiResponse } from "./graphql/graphqlWithResponse";
+export { graphqlWithResponse } from "./graphql/graphqlWithResponse";
 export type {
 	GraphQLErrorDetail,
 	GraphQLRequestOptions,
