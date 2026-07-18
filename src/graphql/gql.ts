@@ -14,11 +14,16 @@ export function gql(
 		"",
 	);
 
-	return dedupeFragmentDefinitions(source);
+	return dedupeGraphQLFragmentDefinitions(source);
 }
 
-function dedupeFragmentDefinitions(source: string): string {
-	const seen = new Set<string>();
+/**
+ * Removes repeated, equivalent fragment definitions from a GraphQL document.
+ * Conflicting definitions with the same fragment name throw instead of silently
+ * changing the meaning of the operation.
+ */
+export function dedupeGraphQLFragmentDefinitions(source: string): string {
+	const seen = new Map<string, string>();
 	const fragmentPattern =
 		/\bfragment\s+([_A-Za-z][_0-9A-Za-z]*)\s+on\s+[_A-Za-z][_0-9A-Za-z]*/g;
 
@@ -46,13 +51,20 @@ function dedupeFragmentDefinitions(source: string): string {
 		}
 
 		const fragmentStart = match.index;
-		const fragmentEnd = consumeTrailingWhitespace(source, bodyEnd + 1);
+		const fragmentBodyEnd = bodyEnd + 1;
+		const fragmentEnd = consumeTrailingWhitespace(source, fragmentBodyEnd);
+		const normalizedDefinition = normalizeDefinition(
+			source.slice(fragmentStart, fragmentBodyEnd),
+		);
+		const previousDefinition = seen.get(name);
 
-		if (!seen.has(name)) {
-			seen.add(name);
+		if (previousDefinition === undefined) {
+			seen.set(name, normalizedDefinition);
 			result += source.slice(cursor, fragmentEnd);
-		} else {
+		} else if (previousDefinition === normalizedDefinition) {
 			result += source.slice(cursor, fragmentStart);
+		} else {
+			throw new Error(`Conflicting GraphQL fragment definition: ${name}`);
 		}
 
 		cursor = fragmentEnd;
@@ -61,6 +73,10 @@ function dedupeFragmentDefinitions(source: string): string {
 	}
 
 	return result + source.slice(cursor);
+}
+
+function normalizeDefinition(source: string): string {
+	return source.replace(/\s+/g, " ").trim();
 }
 
 function findMatchingBrace(source: string, openBraceIndex: number): number {

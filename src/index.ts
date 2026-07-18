@@ -102,7 +102,7 @@ export type {
 } from "./graphql/createGraphQLRequester";
 export { createGraphQLRequester } from "./graphql/createGraphQLRequester";
 export { GraphQLRequestError } from "./graphql/GraphQLRequestError";
-export { gql } from "./graphql/gql";
+export { dedupeGraphQLFragmentDefinitions, gql } from "./graphql/gql";
 export type {
 	GraphQLErrorDetail,
 	GraphQLRequestOptions,
