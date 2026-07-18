@@ -27,8 +27,10 @@ try {
 		join(consumerDir, "esm.mjs"),
 		[
 			'import { createClient, createLoggerPlugin } from "@api-wrappers/api-core";',
+			'import { gql } from "@api-wrappers/api-core/graphql";',
 			'const client = createClient({ baseUrl: "https://api.test", plugins: [createLoggerPlugin({ logRequest: false, logResponse: false, logError: false })] });',
 			'if (!client || typeof client.get !== "function") throw new Error("missing ESM client");',
+			'if (typeof gql !== "function") throw new Error("missing ESM GraphQL subpath");',
 		].join("\n"),
 	);
 	await $`node esm.mjs`.cwd(consumerDir).quiet();
@@ -37,8 +39,10 @@ try {
 		join(consumerDir, "cjs.cjs"),
 		[
 			'const { createClient, createLoggerPlugin } = require("@api-wrappers/api-core");',
+			'const { gql } = require("@api-wrappers/api-core/graphql");',
 			'const client = createClient({ baseUrl: "https://api.test", plugins: [createLoggerPlugin({ logRequest: false, logResponse: false, logError: false })] });',
 			'if (!client || typeof client.get !== "function") throw new Error("missing CJS client");',
+			'if (typeof gql !== "function") throw new Error("missing CJS GraphQL subpath");',
 		].join("\n"),
 	);
 	await $`node cjs.cjs`.cwd(consumerDir).quiet();
