@@ -32,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.0
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
 
@@ -42,7 +42,7 @@ jobs:
           bun-version: latest
 
       - name: Setup Node.js for npm trusted publishing
-        uses: actions/setup-node@v6.4.0
+        uses: actions/setup-node@v7.0.0
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
@@ -87,7 +87,7 @@ jobs:
 
       - name: Create or update version PR
         if: github.ref == 'refs/heads/main' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && steps.changesets.outputs.pending == 'true'
-        uses: changesets/action@v1
+        uses: changesets/action@v2
         with:
           version: bun run version-packages
         env:
