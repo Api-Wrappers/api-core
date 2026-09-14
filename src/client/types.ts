@@ -47,8 +47,9 @@ export interface ClientConfig {
 	baseUrl: string;
 	/**
 	 * Headers merged into every request. Per-request `headers` take
-	 * precedence. `content-type: application/json` is always present as the
-	 * lowest-priority default.
+	 * precedence. `content-type: application/json` is applied as the
+	 * lowest-priority default for JSON-serialisable bodies (plain objects
+	 * and arrays); multipart and binary bodies are left without a default.
 	 */
 	defaultHeaders?: HeaderInput;
 	/** Plugins registered for the lifetime of this client. */

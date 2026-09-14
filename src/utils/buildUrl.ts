@@ -25,10 +25,16 @@ export function buildUrl(base: string, query?: QueryParams): string {
 	const qs = params.toString();
 	if (!qs) return base;
 
-	const separator = base.includes("?")
-		? base.endsWith("?") || base.endsWith("&")
+	// Query strings must precede the fragment; `https://x/a#b?c=1` treats
+	// `?c=1` as part of the fragment, dropping the parameters entirely.
+	const hashIndex = base.indexOf("#");
+	const beforeHash = hashIndex === -1 ? base : base.slice(0, hashIndex);
+	const hash = hashIndex === -1 ? "" : base.slice(hashIndex);
+
+	const separator = beforeHash.includes("?")
+		? beforeHash.endsWith("?") || beforeHash.endsWith("&")
 			? ""
 			: "&"
 		: "?";
-	return `${base}${separator}${qs}`;
+	return `${beforeHash}${separator}${qs}${hash}`;
 }

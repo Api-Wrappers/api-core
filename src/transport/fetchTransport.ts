@@ -36,6 +36,18 @@ export function createFetchTransport(
 
 			if (hasBody) {
 				init.body = serializeRequestBody(ctx.body, ctx.headers);
+
+				// Multipart and binary bodies must not advertise a JSON content
+				// type. Strip a defaulted one so `fetch` can supply the correct
+				// value, including the multipart boundary.
+				if (
+					bodyHasOwnContentType(ctx.body) &&
+					isJsonContentType(ctx.headers["content-type"])
+				) {
+					const headers = { ...ctx.headers };
+					delete headers["content-type"];
+					init.headers = headers;
+				}
 			}
 
 			if (ctx.timeoutMs !== undefined || ctx.signal) {
@@ -114,6 +126,16 @@ function serializeRequestBody(
 
 function isBodyInit(body: unknown): body is BodyInit {
 	if (typeof body === "string") return true;
+	return bodyHasOwnContentType(body);
+}
+
+/**
+ * Body types whose content type is defined by the body itself — multipart
+ * boundaries, URL-encoded forms, blobs, and binary buffers. Callers (or
+ * `fetch`) must supply the matching `content-type`; api-core should not
+ * default these bodies to `application/json`.
+ */
+export function bodyHasOwnContentType(body: unknown): boolean {
 	if (body instanceof ArrayBuffer) return true;
 	if (ArrayBuffer.isView(body)) return true;
 	if (typeof Blob !== "undefined" && body instanceof Blob) return true;

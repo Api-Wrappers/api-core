@@ -1,12 +1,13 @@
 import type { RequestContext } from "../context/RequestContext";
 import type { ResponseContext } from "../context/ResponseContext";
-import { ApiError } from "../errors/ApiError";
+import { ApiError, responseErrorDetails } from "../errors/ApiError";
 import { RateLimitError } from "../errors/RateLimitError";
-import { GraphQLRequestError } from "../graphql/GraphQLRequestError";
-import type { GraphQLRequestOptions, GraphQLResponse } from "../graphql/types";
+import { executeGraphQL } from "../graphql/executeGraphQL";
+import type { GraphQLRequestOptions } from "../graphql/types";
 import { getPluginErrorContext, PluginManager } from "../plugin/PluginManager";
 import { readRetryMeta } from "../plugins/meta";
 import {
+	bodyHasOwnContentType,
 	createFetchTransport,
 	fetchTransport,
 } from "../transport/fetchTransport";
@@ -15,6 +16,7 @@ import type { HeaderInput, HttpMethod, QueryParams } from "../types/common";
 import { isJsonContentType } from "../utils/isJsonContentType";
 import { mergeHeaders } from "../utils/mergeHeaders";
 import { normalizeRetryMaxAttempts } from "../utils/normalizeRetryMaxAttempts";
+import { parseRetryAfterMs } from "../utils/parseRetryAfterMs";
 import { resolveUrl } from "../utils/resolveUrl";
 import { sleep } from "../utils/sleep";
 import type { ClientConfig } from "./types";
@@ -27,8 +29,10 @@ export interface RequestOptions {
 	method?: HttpMethod;
 	/**
 	 * Additional headers merged on top of `ClientConfig.defaultHeaders`.
-	 * These take precedence; `content-type: application/json` is always
-	 * present and is the lowest-priority default.
+	 * These take precedence; `content-type: application/json` is applied as
+	 * the lowest-priority default for JSON-serialisable bodies (plain
+	 * objects and arrays). Multipart and binary bodies are left without a
+	 * default so the runtime can set the correct content type.
 	 */
 	headers?: HeaderInput;
 	/** Request body. Serialised to JSON by {@link fetchTransport}. Ignored for GET and HEAD. */
@@ -201,8 +205,19 @@ export class BaseHttpClient {
 			retryPolicy = this.resolveRetryPolicyFromMeta(ctx, retryPolicy);
 
 			const retryCount = retryPolicy.maxAttempts - 1 - attempt;
-			const attemptCtx =
+			let attemptCtx =
 				ctx.retryCount === retryCount ? ctx : { ...ctx, retryCount };
+
+			// An explicit per-request `timeoutMs` wins over plugin defaults
+			// (e.g. createTimeoutPlugin), which run inside `beforeRequest`
+			// and can only see the merged value. Plugin > ClientConfig still
+			// holds when no per-request override is given.
+			if (
+				options.timeoutMs !== undefined &&
+				attemptCtx.timeoutMs !== options.timeoutMs
+			) {
+				attemptCtx = { ...attemptCtx, timeoutMs: options.timeoutMs };
+			}
 
 			let resCtx: ResponseContext;
 			try {
@@ -212,12 +227,19 @@ export class BaseHttpClient {
 					throw err;
 				}
 
+				// A caller abort is not a retriable transport failure — fail
+				// fast instead of burning through retry attempts.
+				if (attemptCtx.signal?.aborted) {
+					throw err.cause;
+				}
+
 				lastError = err.cause;
 				if (attempt < retryPolicy.maxAttempts - 1) {
 					await this.waitForRetry(
 						attempt,
 						retryPolicy.baseDelay,
 						retryPolicy.jitter,
+						attemptCtx.signal,
 					);
 					continue;
 				}
@@ -238,12 +260,14 @@ export class BaseHttpClient {
 							attempt,
 							wait ?? retryPolicy.baseDelay,
 							false,
+							attemptCtx.signal,
 						);
 					} else {
 						await this.waitForRetry(
 							attempt,
 							retryPolicy.baseDelay,
 							retryPolicy.jitter,
+							attemptCtx.signal,
 						);
 					}
 					lastError = normalizeHttpError(finalResponse, resCtx.parsedBody);
@@ -296,7 +320,9 @@ export class BaseHttpClient {
 			url: resolveUrl(this.config.baseUrl, path),
 			method: options.method ?? "GET",
 			headers: mergeHeaders(
-				{ "content-type": "application/json" },
+				bodyHasOwnContentType(options.body)
+					? undefined
+					: { "content-type": "application/json" },
 				this.config.defaultHeaders,
 				options.headers,
 			),
@@ -361,12 +387,18 @@ export class BaseHttpClient {
 			}
 		}
 
-		const parsedBody = await parseBody(
-			rawResponse,
-			rawResponse.ok
-				? options.responseType
-				: (options.errorResponseType ?? "auto"),
-		);
+		let parsedBody: unknown;
+		try {
+			parsedBody = await parseBody(
+				rawResponse,
+				rawResponse.ok
+					? options.responseType
+					: (options.errorResponseType ?? "auto"),
+			);
+		} catch (err) {
+			await this.pluginManager.onError(err, ctx);
+			throw err;
+		}
 
 		const resCtx: ResponseContext = {
 			request: ctx,
@@ -479,58 +511,67 @@ export class BaseHttpClient {
 		TData = unknown,
 		TVariables extends object = Record<string, unknown>,
 	>(path: string, options: GraphQLRequestOptions<TVariables>): Promise<TData> {
-		const {
-			query,
-			variables,
-			operationName,
-			headers,
-			signal,
-			timeoutMs,
-			cacheKey,
-			tags,
-		} = options;
-
-		const envelope = await this.request<GraphQLResponse<TData>>(path, {
-			method: "POST",
-			body: {
-				query,
-				...(variables !== undefined && { variables }),
-				...(operationName !== undefined && { operationName }),
-			},
-			headers: mergeHeaders(headers, { "content-type": "application/json" }),
-			signal,
-			timeoutMs,
-			cacheKey,
-			tags,
-		});
-
-		// Surface GraphQL application-layer errors as a typed exception.
-		// We throw even when partial data is present — callers who need
-		// partial results can catch GraphQLRequestError and read .partialData.
-		if (envelope.errors && envelope.errors.length > 0) {
-			throw new GraphQLRequestError(envelope.errors, envelope.data);
-		}
-
-		// data may be undefined if the server returned an empty response —
+		// `data` may be undefined if the server returned an empty response —
 		// safe to cast because TData defaults to unknown.
-		return envelope.data as TData;
+		const result = await executeGraphQL<TData, TVariables>(this, path, options);
+		return result.data;
+	}
+
+	/**
+	 * Invokes every registered plugin's `onError` hook. Exposed so standalone
+	 * helpers (e.g. {@link graphqlWithResponse}) can report errors that occur
+	 * after the request pipeline — such as GraphQL application errors — to
+	 * plugins in the same way as transport and HTTP failures.
+	 */
+	async notifyError(error: unknown, ctx: RequestContext): Promise<void> {
+		await this.pluginManager.onError(error, ctx);
 	}
 
 	private async waitForRetry(
 		attempt: number,
 		baseDelay: number,
 		useJitter: boolean,
+		signal?: AbortSignal,
 	): Promise<void> {
 		// Exponential backoff: delay * 2^attempt
 		const exponential = baseDelay * 2 ** attempt;
 		const ms = useJitter
 			? exponential * (0.5 + Math.random() * 0.5)
 			: exponential;
-		await sleep(Math.round(ms));
+		await sleepWithSignal(Math.round(ms), signal);
 	}
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function sleepWithSignal(ms: number, signal?: AbortSignal): Promise<void> {
+	if (signal?.aborted) return Promise.reject(getAbortReason(signal));
+	if (ms <= 0) return sleep(0);
+	return new Promise((resolve, reject) => {
+		let onAbort: (() => void) | undefined;
+		const cleanup = () => {
+			if (onAbort) signal?.removeEventListener("abort", onAbort);
+		};
+		const timer = setTimeout(() => {
+			cleanup();
+			resolve();
+		}, ms);
+		onAbort = () => {
+			clearTimeout(timer);
+			cleanup();
+			reject(getAbortReason(signal));
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+	});
+}
+
+function getAbortReason(signal?: AbortSignal): unknown {
+	if (signal?.reason !== undefined) return signal.reason;
+	if (typeof DOMException !== "undefined") {
+		return new DOMException("The operation was aborted.", "AbortError");
+	}
+	return new Error("The operation was aborted.");
+}
 
 async function parseBody(
 	response: Response,
@@ -555,25 +596,24 @@ async function parseBody(
 }
 
 function normalizeHttpError(response: Response, body: unknown): ApiError {
+	const details = responseErrorDetails(response);
 	if (response.status === 429) {
-		return new RateLimitError(readRetryAfterMs(response), body);
+		return new RateLimitError(
+			readRetryAfterMs(response),
+			body,
+			undefined,
+			details,
+		);
 	}
 	return new ApiError(
 		`Request failed with status ${response.status}`,
 		response.status,
 		body,
+		undefined,
+		details,
 	);
 }
 
 function readRetryAfterMs(response: Response): number | undefined {
-	const raw = response.headers.get("retry-after");
-	if (!raw) return undefined;
-
-	const seconds = Number(raw);
-	if (Number.isFinite(seconds)) return Math.max(0, seconds * 1_000);
-
-	const date = Date.parse(raw);
-	if (!Number.isNaN(date)) return Math.max(0, date - Date.now());
-
-	return undefined;
+	return parseRetryAfterMs(response.headers.get("retry-after"));
 }

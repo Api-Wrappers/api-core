@@ -381,7 +381,10 @@ client.request<T>(path, { method: "POST", body });
 ```
 
 Plain objects and arrays are JSON encoded. Strings and native `BodyInit`
-values are sent as-is, which supports APIs that expect text query languages:
+values are sent as-is, which supports APIs that expect text query languages.
+`FormData`, `URLSearchParams`, blobs, and binary buffers are passed through
+without a default `content-type` so the runtime can set the correct one,
+including the multipart boundary:
 
 ```ts
 const games = await client.post<Array<Game>>(

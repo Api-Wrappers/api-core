@@ -104,6 +104,9 @@ describe("createRateLimitPlugin", () => {
 		const controller = new AbortController();
 		const second = client.get("/b", { signal: controller.signal });
 
+		// Let the second request reach the queue before aborting, so the
+		// queued-abort path is exercised rather than the pre-acquire check.
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		controller.abort(new Error("cancelled"));
 
 		await expect(second).rejects.toThrow("cancelled");

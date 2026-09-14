@@ -43,7 +43,7 @@ await client.get("/movies", {
 | --- | --- |
 | `method` | HTTP method for `request`. Convenience methods set this for you. |
 | `headers` | Per-request headers. These override `defaultHeaders`. |
-| `body` | Request body. Objects/arrays are JSON encoded; strings are sent as-is. |
+| `body` | Request body. Objects/arrays are JSON encoded; strings and `BodyInit` values are sent as-is. |
 | `query` | Query string values. Arrays become repeated query parameters. |
 | `timeoutMs` | Per-request timeout override. |
 | `signal` | Caller-provided abort signal. Composes with timeout handling. |
@@ -65,6 +65,28 @@ await client.get("/movies", {
 `headers` and `defaultHeaders` accept any `HeadersInit` shape: plain objects,
 native `Headers`, or `[name, value]` tuples. Header names are normalized
 case-insensitively before the request reaches plugins or transports.
+`content-type: application/json` is applied as the lowest-priority default for
+JSON-serialisable bodies; multipart and binary bodies (`FormData`,
+`URLSearchParams`, `Blob`, buffers, streams) are left without a default so the
+runtime can set the correct value.
+
+## Multipart And Form Bodies
+
+`FormData` and `URLSearchParams` bodies are passed straight to `fetch`, which
+supplies the matching `content-type` — including the generated multipart
+boundary:
+
+```ts
+const form = new FormData();
+form.append("avatar", file);
+
+await client.post("/users/1/avatar", form);
+
+await client.post(
+	"/oauth/token",
+	new URLSearchParams({ grant_type: "client_credentials" }),
+);
+```
 
 ## Response Metadata
 

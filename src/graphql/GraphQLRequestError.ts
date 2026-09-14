@@ -1,4 +1,4 @@
-import { ApiError } from "../errors/ApiError";
+import { ApiError, type ApiErrorDetails } from "../errors/ApiError";
 import type { GraphQLErrorDetail } from "./types";
 
 /**
@@ -25,9 +25,14 @@ export class GraphQLRequestError<
 	 */
 	readonly partialData: unknown;
 
-	constructor(errors: TError[], partialData?: unknown, cause?: unknown) {
+	constructor(
+		errors: TError[],
+		partialData?: unknown,
+		cause?: unknown,
+		details?: ApiErrorDetails,
+	) {
 		const message = errors.map((error) => error.message).join("; ");
-		super(`GraphQL errors: ${message}`, 200, { errors }, cause);
+		super(`GraphQL errors: ${message}`, 200, { errors }, cause, details);
 		this.name = "GraphQLRequestError";
 		this.graphqlErrors = errors;
 		this.partialData = partialData;

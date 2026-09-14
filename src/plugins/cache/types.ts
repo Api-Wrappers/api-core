@@ -12,7 +12,14 @@ export interface CacheStore {
 export interface CachePluginOptions {
 	store?: CacheStore;
 	ttlMs?: number;
-	methods?: HttpMethod[];
+	/** HTTP methods to cache. Defaults to `["GET"]`; matching is case-insensitive. */
+	methods?: (HttpMethod | Lowercase<HttpMethod>)[];
+	/**
+	 * Derives the cache key for a request. Defaults to
+	 * `METHOD:url?query`, with a body hash appended when a body is present.
+	 * The default key ignores headers — provide a custom `generateKey` or an
+	 * explicit `cacheKey` when responses vary by auth, tenant, or locale.
+	 */
 	generateKey?: (ctx: RequestContext) => string;
 }
 
@@ -23,8 +30,9 @@ export interface CachePluginOptions {
 export interface CachePlugin extends ApiPlugin {
 	/**
 	 * Removes a single entry from the cache by its exact key.
-	 * The key is either the auto-generated `"METHOD:url?query"` string or the
-	 * explicit `cacheKey` passed in `RequestOptions`.
+	 * The key is either the auto-generated `"METHOD:url?query"` string (plus
+	 * a body hash when the request had a body) or the explicit `cacheKey`
+	 * passed in `RequestOptions`.
 	 */
 	invalidate(key: string): Promise<void>;
 	/**

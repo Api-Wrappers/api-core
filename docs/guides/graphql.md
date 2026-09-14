@@ -84,6 +84,26 @@ try {
 
 HTTP-level failures still throw `ApiError`, `RateLimitError`, or `TimeoutError`.
 
+## Response Metadata
+
+Use `graphqlWithResponse` when you need the raw response, request context, or
+plugin metadata alongside the parsed `data`. It runs the same pipeline and
+reports application errors to plugins through `onError`, just like
+`client.graphql()`.
+
+```ts
+import { graphqlWithResponse } from "@api-wrappers/api-core";
+
+const result = await graphqlWithResponse<GetMediaQuery>(client, "/graphql", {
+	query: GET_MEDIA,
+	variables: { id: 1 },
+});
+
+result.data.Media.title.romaji;
+result.response.headers.get("x-ratelimit-remaining");
+result.extensions;
+```
+
 ## Caching GraphQL Requests
 
 GraphQL requests are POST requests, so the cache plugin does not cache them by

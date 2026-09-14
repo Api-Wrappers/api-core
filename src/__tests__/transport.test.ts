@@ -85,6 +85,59 @@ describe("fetchTransport", () => {
 		}
 	});
 
+	it("strips a JSON content type for multipart bodies", async () => {
+		let captured: RequestInit | undefined;
+		const transport = createFetchTransport(async (_url, init) => {
+			captured = init;
+			return new Response("{}");
+		});
+
+		const form = new FormData();
+		form.append("file", "contents");
+
+		await transport.execute(makeCtx({ body: form }));
+
+		expect(captured?.body).toBe(form);
+		expect(captured?.headers).toEqual({});
+	});
+
+	it("strips a JSON content type for URL-encoded bodies", async () => {
+		let captured: RequestInit | undefined;
+		const transport = createFetchTransport(async (_url, init) => {
+			captured = init;
+			return new Response("{}");
+		});
+
+		const params = new URLSearchParams({ query: "name" });
+
+		await transport.execute(makeCtx({ body: params }));
+
+		expect(captured?.body).toBe(params);
+		expect(captured?.headers).toEqual({});
+	});
+
+	it("keeps a non-JSON content type for multipart bodies", async () => {
+		let captured: RequestInit | undefined;
+		const transport = createFetchTransport(async (_url, init) => {
+			captured = init;
+			return new Response("{}");
+		});
+
+		const form = new FormData();
+		form.append("file", "contents");
+
+		await transport.execute(
+			makeCtx({
+				headers: { "content-type": "multipart/form-data; boundary=custom" },
+				body: form,
+			}),
+		);
+
+		expect(captured?.headers).toEqual({
+			"content-type": "multipart/form-data; boundary=custom",
+		});
+	});
+
 	it("throws TimeoutError when its own timeout aborts the request", async () => {
 		const transport = createFetchTransport(
 			() =>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { buildUrl } from "../utils/buildUrl";
 import { isPlainObject } from "../utils/isPlainObject";
 import { mergeHeaders } from "../utils/mergeHeaders";
+import { parseRetryAfterMs } from "../utils/parseRetryAfterMs";
 import { resolveUrl } from "../utils/resolveUrl";
 import { sleep } from "../utils/sleep";
 
@@ -36,6 +37,16 @@ describe("buildUrl", () => {
 	it("appends query params to URLs that already have a query string", () => {
 		const url = buildUrl("https://api.test/v1?existing=1", { page: 2 });
 		expect(url).toBe("https://api.test/v1?existing=1&page=2");
+	});
+
+	it("inserts query params before a URL fragment", () => {
+		const url = buildUrl("https://api.test/v1#section", { page: 2 });
+		expect(url).toBe("https://api.test/v1?page=2#section");
+	});
+
+	it("inserts query params before a fragment on URLs with a query string", () => {
+		const url = buildUrl("https://api.test/v1?existing=1#section", { page: 2 });
+		expect(url).toBe("https://api.test/v1?existing=1&page=2#section");
 	});
 });
 
@@ -103,6 +114,32 @@ describe("isPlainObject", () => {
 		expect(isPlainObject("string")).toBe(false);
 		expect(isPlainObject([])).toBe(false);
 		expect(isPlainObject(new Date())).toBe(false);
+	});
+});
+
+describe("parseRetryAfterMs", () => {
+	it("parses delay-seconds values", () => {
+		expect(parseRetryAfterMs("2")).toBe(2_000);
+		expect(parseRetryAfterMs("0")).toBe(0);
+	});
+
+	it("parses HTTP-date values relative to now", () => {
+		const now = Date.UTC(2024, 0, 1, 0, 0, 0);
+		expect(parseRetryAfterMs("Mon, 01 Jan 2024 00:00:05 GMT", now)).toBe(5_000);
+	});
+
+	it("clamps past HTTP-dates to zero", () => {
+		const now = Date.UTC(2024, 0, 1, 0, 0, 0);
+		expect(
+			parseRetryAfterMs("Mon, 01 Jan 2024 00:00:00 GMT", now + 10_000),
+		).toBe(0);
+	});
+
+	it("returns undefined for missing or malformed values", () => {
+		expect(parseRetryAfterMs(undefined)).toBeUndefined();
+		expect(parseRetryAfterMs(null)).toBeUndefined();
+		expect(parseRetryAfterMs("")).toBeUndefined();
+		expect(parseRetryAfterMs("not-a-date")).toBeUndefined();
 	});
 });
 

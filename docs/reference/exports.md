@@ -5,6 +5,7 @@
 - `createClient`
 - `BaseHttpClient`
 - `RequestOptions`
+- `ResponseType`
 - `ApiResponse`
 - `ClientConfig`
 - `LoggerInterface`
@@ -18,6 +19,8 @@
 ## Errors
 
 - `ApiError`
+- `ApiErrorDetails`
+- `responseErrorDetails`
 - `RateLimitError`
 - `TimeoutError`
 - `GraphQLRequestError`
@@ -42,6 +45,11 @@
 - `CachePluginOptions`
 - `CacheStore`
 - `MemoryStore`
+- `createHeaderRateLimitPlugin`
+- `HeaderRateLimitPlugin`
+- `HeaderRateLimitPluginOptions`
+- `HeaderRateLimitState`
+- `RateLimitResetFormat`
 - `createLoggerPlugin`
 - `LoggerPluginOptions`
 - `createRateLimitPlugin`
@@ -54,6 +62,14 @@
 ## GraphQL
 
 - `gql`
+- `dedupeGraphQLFragmentDefinitions`
+- `graphqlWithResponse`
+- `GraphQLApiResponse`
+- `GraphQLClientLike`
+- `createGraphQLRequester`
+- `CreateGraphQLRequesterOptions`
+- `GraphQLRequester`
+- `GraphQLRequesterOptions`
 - `GraphQLErrorDetail`
 - `GraphQLRequestOptions`
 - `GraphQLResponse`

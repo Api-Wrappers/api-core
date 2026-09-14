@@ -1,5 +1,6 @@
 import type { ResponseContext } from "../../context/ResponseContext";
 import { createPassThroughError } from "../../plugin/passThroughError";
+import { parseRetryAfterMs } from "../../utils/parseRetryAfterMs";
 import type {
 	HeaderRateLimitPlugin,
 	HeaderRateLimitPluginOptions,
@@ -89,10 +90,12 @@ function updateState(ctx: ResponseContext, options: StateUpdateOptions): void {
 		options.resetFormat,
 		currentTime,
 	);
-	const retryAt = parseRetryAfter(
+	const retryDelayMs = parseRetryAfterMs(
 		headers.get(options.retryAfterHeader),
 		currentTime,
 	);
+	const retryAt =
+		retryDelayMs === undefined ? undefined : currentTime + retryDelayMs;
 
 	if (limit !== undefined) options.state.limit = limit;
 	if (remaining !== undefined) options.state.remaining = remaining;
@@ -123,17 +126,6 @@ function parseResetAt(
 	if (format === "unix-milliseconds") return Math.max(0, parsed);
 	if (format === "delay-seconds") return now + Math.max(0, parsed * 1_000);
 	return Math.max(0, parsed * 1_000);
-}
-
-function parseRetryAfter(
-	value: string | null,
-	now: number,
-): number | undefined {
-	if (!value) return undefined;
-	const seconds = Number(value);
-	if (Number.isFinite(seconds)) return now + Math.max(0, seconds * 1_000);
-	const date = Date.parse(value);
-	return Number.isNaN(date) ? undefined : Math.max(now, date);
 }
 
 function parseFiniteNumber(value: string | null): number | undefined {

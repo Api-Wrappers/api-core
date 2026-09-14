@@ -6,12 +6,29 @@ import type { CachePlugin, CachePluginOptions } from "./types";
 
 const DEFAULT_CACHEABLE_METHODS = ["GET"] as const;
 
+/**
+ * Caches parsed response bodies keyed by method + URL (+ body hash) or an
+ * explicit `RequestOptions.cacheKey`.
+ *
+ * Notes:
+ * - Only the parsed body is stored. The synthetic cache-hit response always
+ *   reports `status: 200` with `content-type: application/json`, so this
+ *   plugin is best suited to JSON APIs. Binary/text payloads round-trip
+ *   through `parsedBody`, but `afterResponse` plugins reading the raw
+ *   `Response` will see the JSON-serialised form, not the original bytes.
+ * - The tag index used by `invalidateByTag` is in-process only. When `store`
+ *   is shared across clients/processes (e.g. Redis), prefer explicit
+ *   `invalidate(key)` calls — tag invalidation only knows keys stored through
+ *   this plugin instance.
+ */
 export function createCachePlugin(
 	options: CachePluginOptions = {},
 ): CachePlugin {
 	const store = options.store ?? new MemoryStore();
 	const ttlMs = options.ttlMs;
-	const methods: string[] = options.methods ?? [...DEFAULT_CACHEABLE_METHODS];
+	const methods: string[] = (
+		options.methods ?? [...DEFAULT_CACHEABLE_METHODS]
+	).map((method) => method.toUpperCase());
 	const generateKey = options.generateKey ?? defaultCacheKey;
 
 	// tag → Set<cacheKey>: populated during afterResponse, used by invalidateByTag.
@@ -22,7 +39,7 @@ export function createCachePlugin(
 		priority: 20,
 
 		async beforeRequest(ctx) {
-			if (!methods.includes(ctx.method)) return ctx;
+			if (!methods.includes(ctx.method.toUpperCase())) return ctx;
 
 			const key = ctx.cacheKey ?? generateKey(ctx);
 			const cached = await store.get(key);
@@ -65,15 +82,23 @@ export function createCachePlugin(
 			}
 
 			const key = readStringMeta(ctx.request.meta, BUILT_IN_META_KEYS.cacheKey);
-			if (key && methods.includes(ctx.request.method) && ctx.response.ok) {
+			if (
+				key &&
+				methods.includes(ctx.request.method.toUpperCase()) &&
+				ctx.response.ok
+			) {
 				await store.set(key, ctx.parsedBody, ttlMs);
-				ctx.meta[BUILT_IN_META_KEYS.cacheStored] = true;
 
 				// Record tag → key associations for invalidateByTag.
 				for (const tag of ctx.request.tags ?? []) {
 					if (!tagIndex.has(tag)) tagIndex.set(tag, new Set());
 					tagIndex.get(tag)?.add(key);
 				}
+
+				return {
+					...ctx,
+					meta: { ...ctx.meta, [BUILT_IN_META_KEYS.cacheStored]: true },
+				};
 			}
 
 			return ctx;
@@ -103,7 +128,32 @@ export function createCachePlugin(
 }
 
 function defaultCacheKey(ctx: RequestContext): string {
-	return `${ctx.method}:${buildUrl(ctx.url, ctx.query)}`;
+	const base = `${ctx.method.toUpperCase()}:${buildUrl(ctx.url, ctx.query)}`;
+	// POST-style requests opted into caching must vary on the body, otherwise
+	// different payloads to the same URL collide on one entry.
+	if (ctx.body === undefined) return base;
+	return `${base}:body=${hashBody(ctx.body)}`;
+}
+
+function hashBody(body: unknown): string {
+	if (typeof body === "string") return `s${fnv1a(body)}`;
+	try {
+		const json = JSON.stringify(body);
+		if (json !== undefined) return `j${fnv1a(json)}`;
+	} catch {
+		// Unserializable body — fall through to the type tag below.
+	}
+	return `t${typeof body}`;
+}
+
+/** FNV-1a 32-bit hash, hex-encoded. Short + deterministic for cache keys. */
+function fnv1a(input: string): string {
+	let hash = 0x811c9dc5;
+	for (let i = 0; i < input.length; i++) {
+		hash ^= input.charCodeAt(i) ?? 0;
+		hash = Math.imul(hash, 0x01000193);
+	}
+	return (hash >>> 0).toString(16);
 }
 
 function serializeCachedBody(value: unknown): BodyInit | null {

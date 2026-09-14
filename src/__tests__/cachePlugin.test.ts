@@ -111,6 +111,48 @@ describe("cachePlugin", () => {
 		expect(calls).toBe(2);
 	});
 
+	it("varies cached POST keys by request body", async () => {
+		let calls = 0;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [createCachePlugin({ methods: ["post"] })],
+			transport: {
+				execute: async () => {
+					calls++;
+					return jsonResponse({ calls });
+				},
+			},
+		});
+
+		await client.post("/search", { term: "a" });
+		await client.post("/search", { term: "b" }); // different body → separate entry
+		expect(calls).toBe(2);
+
+		const cached = await client.post<{ calls: number }>("/search", {
+			term: "a",
+		});
+		expect(cached.calls).toBe(1);
+		expect(calls).toBe(2);
+	});
+
+	it("matches cacheable methods case-insensitively", async () => {
+		let calls = 0;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [createCachePlugin({ methods: ["get"] })],
+			transport: {
+				execute: async () => {
+					calls++;
+					return jsonResponse({ calls });
+				},
+			},
+		});
+
+		await client.get("/data");
+		await client.get("/data");
+		expect(calls).toBe(1);
+	});
+
 	it("serves cached values that cannot be JSON stringified", async () => {
 		let calls = 0;
 		const client = new BaseHttpClient({

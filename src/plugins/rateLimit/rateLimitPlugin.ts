@@ -70,7 +70,7 @@ export function createRateLimitPlugin(
 			cleanupQueueItem(item);
 
 			if (item.signal?.aborted) {
-				item.reject(getAbortReason(item.signal));
+				item.reject(createPassThroughError(getAbortReason(item.signal)));
 				continue;
 			}
 

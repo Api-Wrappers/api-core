@@ -7,10 +7,10 @@ GraphQL application errors.
 
 | Error | When it is thrown | Useful fields |
 | --- | --- | --- |
-| `ApiError` | Non-2xx HTTP response after retries are exhausted | `status`, `responseBody`, `cause` |
+| `ApiError` | Non-2xx HTTP response after retries are exhausted, or a malformed GraphQL envelope | `status`, `responseBody`, `headers`, `url`, `cause` |
 | `RateLimitError` | HTTP 429 response | `retryAfterMs`, `responseBody` |
 | `TimeoutError` | Request timeout | `cause` |
-| `GraphQLRequestError` | GraphQL response contains `errors` | `graphqlErrors`, `partialData` |
+| `GraphQLRequestError` | GraphQL response contains a non-empty `errors` array | `graphqlErrors`, `partialData` |
 
 ## Handling Errors
 

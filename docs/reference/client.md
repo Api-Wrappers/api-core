@@ -36,6 +36,7 @@ class MyApiClient extends BaseHttpClient {
 | `head<T>(path, options)` | HEAD request. |
 | `options<T>(path, options)` | OPTIONS request. |
 | `graphql<TData, TVariables>(path, options)` | GraphQL POST request returning `data`. |
+| `notifyError(error, ctx)` | Report a post-pipeline error (e.g. a GraphQL application error) to every plugin's `onError` hook. |
 | `init()` | Initialize plugins. Called lazily before the first request. |
 | `dispose()` | Run plugin cleanup hooks. |
 

@@ -63,4 +63,50 @@ describe("graphqlWithResponse", () => {
 			graphqlWithResponse(client, "/graphql", { query: QUERY }),
 		).rejects.toBeInstanceOf(GraphQLRequestError);
 	});
+
+	it("notifies plugins about application errors", async () => {
+		const seen: unknown[] = [];
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "spy",
+					onError(error) {
+						seen.push(error);
+					},
+				},
+			],
+			transport: {
+				async execute() {
+					return new Response(
+						JSON.stringify({ errors: [{ message: "Denied" }] }),
+						{ headers: { "content-type": "application/json" } },
+					);
+				},
+			},
+		});
+
+		await expect(
+			graphqlWithResponse(client, "/graphql", { query: QUERY }),
+		).rejects.toBeInstanceOf(GraphQLRequestError);
+		expect(seen).toHaveLength(1);
+		expect(seen[0]).toBeInstanceOf(GraphQLRequestError);
+	});
+
+	it("throws ApiError for a non-object envelope", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: {
+				async execute() {
+					return new Response(JSON.stringify([1, 2, 3]), {
+						headers: { "content-type": "application/json" },
+					});
+				},
+			},
+		});
+
+		await expect(
+			graphqlWithResponse(client, "/graphql", { query: QUERY }),
+		).rejects.toThrow("Invalid GraphQL response envelope");
+	});
 });

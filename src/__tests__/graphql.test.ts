@@ -281,6 +281,38 @@ describe("BaseHttpClient.graphql()", () => {
 		);
 	});
 
+	it("treats a null errors field as a successful response", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: BASE,
+			transport: makeTransport(async () =>
+				jsonResponse({ data: { user: null }, errors: null }),
+			),
+		});
+
+		await expect(client.graphql(PATH, { query: QUERY })).resolves.toEqual({
+			user: null,
+		});
+	});
+
+	it("throws ApiError when errors is not an array", async () => {
+		const client = new BaseHttpClient({
+			baseUrl: BASE,
+			transport: makeTransport(async () =>
+				jsonResponse({ data: null, errors: { message: "Denied" } }),
+			),
+		});
+
+		let caught: ApiError | undefined;
+		try {
+			await client.graphql(PATH, { query: QUERY });
+		} catch (err) {
+			if (err instanceof ApiError) caught = err;
+		}
+
+		expect(caught).toBeInstanceOf(ApiError);
+		expect(caught?.message).toContain("Invalid GraphQL response envelope");
+	});
+
 	// 5. HTTP-level failures ─────────────────────────────────────────────────
 
 	it("throws RateLimitError on HTTP 429", async () => {

@@ -38,6 +38,8 @@ interface RequestOptions {
 	timeoutMs?: number;
 	cacheKey?: string;
 	tags?: string[];
+	responseType?: ResponseType;
+	errorResponseType?: ResponseType;
 }
 ```
 

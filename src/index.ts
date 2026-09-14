@@ -53,7 +53,8 @@ export type { ResponseContext } from "./context/ResponseContext";
 
 // ─── Errors ───────────────────────────────────────────────────────────────────
 
-export { ApiError } from "./errors/ApiError";
+export type { ApiErrorDetails } from "./errors/ApiError";
+export { ApiError, responseErrorDetails } from "./errors/ApiError";
 export type { ApiCoreError } from "./errors/guards";
 export {
 	isApiCoreError,
@@ -107,9 +108,12 @@ export type {
 	GraphQLRequesterOptions,
 } from "./graphql/createGraphQLRequester";
 export { createGraphQLRequester } from "./graphql/createGraphQLRequester";
+export type {
+	GraphQLApiResponse,
+	GraphQLClientLike,
+} from "./graphql/executeGraphQL";
 export { GraphQLRequestError } from "./graphql/GraphQLRequestError";
 export { dedupeGraphQLFragmentDefinitions, gql } from "./graphql/gql";
-export type { GraphQLApiResponse } from "./graphql/graphqlWithResponse";
 export { graphqlWithResponse } from "./graphql/graphqlWithResponse";
 export type {
 	GraphQLErrorDetail,

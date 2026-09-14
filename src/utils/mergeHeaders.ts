@@ -3,6 +3,7 @@ import type { HeaderInput } from "../types/common";
 /**
  * Merges header objects left to right. Keys are normalized to
  * lowercase so merging is case-insensitive. Later sources win.
+ * `null` and `undefined` values are skipped.
  */
 export function mergeHeaders(
 	...sources: (HeaderInput | undefined)[]
@@ -26,6 +27,7 @@ export function mergeHeaders(
 		}
 
 		for (const [key, value] of Object.entries(source)) {
+			if (value === undefined || value === null) continue;
 			result[key.toLowerCase()] = String(value);
 		}
 	}

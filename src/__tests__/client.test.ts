@@ -44,6 +44,51 @@ describe("BaseHttpClient", () => {
 		expect(captured?.headers["x-api-key"]).toBe("secret");
 	});
 
+	it("defaults content-type to JSON for object bodies", async () => {
+		let captured: RequestContext | undefined;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({});
+			}),
+		});
+
+		await client.post("/", { name: "Ada" });
+		expect(captured?.headers["content-type"]).toBe("application/json");
+	});
+
+	it("does not default content-type for multipart bodies", async () => {
+		let captured: RequestContext | undefined;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({});
+			}),
+		});
+
+		const form = new FormData();
+		form.append("name", "Ada");
+
+		await client.post("/upload", form);
+		expect(captured?.headers["content-type"]).toBeUndefined();
+	});
+
+	it("does not default content-type for URL-encoded bodies", async () => {
+		let captured: RequestContext | undefined;
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			transport: makeTransport(async (ctx) => {
+				captured = ctx;
+				return jsonResponse({});
+			}),
+		});
+
+		await client.post("/login", new URLSearchParams({ user: "ada" }));
+		expect(captured?.headers["content-type"]).toBeUndefined();
+	});
+
 	it("accepts native HeadersInit values for default and request headers", async () => {
 		let captured: RequestContext | undefined;
 		const client = new BaseHttpClient({
@@ -319,6 +364,33 @@ describe("BaseHttpClient", () => {
 
 		const result = await client.get<{ bare: boolean }>("/");
 		expect(result.bare).toBe(true);
+	});
+
+	it("disposes plugins in reverse registration order", async () => {
+		const order: string[] = [];
+		const client = new BaseHttpClient({
+			baseUrl: "https://api.test",
+			plugins: [
+				{
+					name: "first",
+					dispose() {
+						order.push("first");
+					},
+				},
+				{
+					name: "second",
+					dispose() {
+						order.push("second");
+					},
+				},
+			],
+			transport: makeTransport(async () => jsonResponse({})),
+		});
+
+		await client.get("/");
+		await client.dispose();
+
+		expect(order).toEqual(["second", "first"]);
 	});
 
 	it("returns undefined for empty successful responses", async () => {
